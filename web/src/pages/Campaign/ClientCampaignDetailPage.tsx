@@ -250,61 +250,9 @@ const ClientCampaignDetailPage: React.FC = () => {
     });
   }, [walkerPosition, doors, campaign?.doorRadiusM]);
 
-  const _debugInfo = {
-    timestamp: new Date().toISOString(),
-    tracking: {
-      state: trackingState,
-      isTracking,
-      hasRecentActivity,
-      elapsedMinutes: Math.floor(elapsedMinutes),
-      distanceKm: distanceKm.toFixed(2),
-    },
-    position: walkerPosition ? { lat: walkerPosition.lat.toFixed(6), lng: walkerPosition.lng.toFixed(6) } : null,
-    campaign: {
-      id: campaignId,
-      name: campaign?.name,
-      doorRadiusM: campaign?.doorRadiusM || 100,
-      totalDoors: doors.length,
-      deliveredDoors: doors.filter((d) => d.status === "delivered").length,
-      pendingDoors: doors.filter((d) => d.status === "pending").length,
-      reportedDoors: doors.filter((d) => d.status === "reported").length,
-    },
-    geofence: {
-      nearbyDoorsCount: nearbyDoors?.length || 0,
-      nearbyDoors: nearbyDoors?.slice(0, 3).map((d) => ({
-        id: d.id,
-        address: d.address,
-        status: d.status,
-      })) || [],
-    },
-    autoDelivery: {
-      callbackRegistered: trackingDebugInfo.callbackRegistered,
-      sessionCreationError: trackingDebugInfo.sessionCreationError || null,
-      nearbyDoorsDetected: trackingDebugInfo.nearbyDoorsDetected,
-      lastGeofenceCheck: trackingDebugInfo.lastGeofenceCheck || null,
-      deliveryAttempts: trackingDebugInfo.deliveryAttempts,
-      deliveryErrors: trackingDebugInfo.deliveryErrors,
-    },
-    doors: doors.slice(0, 5).map((d) => ({
-      id: d.id,
-      address: d.address,
-      status: d.status,
-      hasCoords: !!(d.lat && d.lng),
-    })),
-    trackSession: {
-      sessionId: trackSessionId,
-      trackPointsCount: displayTrackPoints.length,
-      trackStopsCount: displayTrackStops.length,
-      lastTrackPoint: latestTrackPoint
-        ? {
-            lat: latestTrackPoint.lat.toFixed(6),
-            lng: latestTrackPoint.lng.toFixed(6),
-            timestamp: new Date(latestTrackPoint.t * 1000).toISOString(),
-            secondsAgo: Math.floor(Date.now() / 1000) - latestTrackPoint.t,
-          }
-        : null,
-    },
-  };
+  // The DebugPanel that consumed a verbose aggregate debug object was dropped
+  // in the port. The component-level DeliveryTrackingPanel reads the SDK's
+  // trackingDebugInfo directly (see prop above), which is sufficient.
 
   const handleStatusChange = async (newStatus: CampaignStatus) => {
     if (!campaignId || !isAdmin) return;
