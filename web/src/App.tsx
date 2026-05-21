@@ -7,6 +7,14 @@ import PrivateRoute from './routes/PrivateRoute';
 import ClientDashboard from './pages/client/ClientDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 
+// Client pages
+import ClientCampaignDetailPage from './pages/Campaign/ClientCampaignDetailPage';
+import ClientOnboardingPage from './pages/client/ClientOnboardingPage';
+import CampaignSetupPage from './pages/Campaign/CampaignSetupPage';
+import FlyersPage from './pages/Flyers/FlyersPage';
+import PropertiesPage from './pages/Properties/PropertiesPage';
+import PropertyDetailPage from './pages/Properties/PropertyDetailPage';
+
 // Walker pages
 import WalkerCampaignsPage from './pages/walker/WalkerCampaignsPage';
 import WalkerCampaignDetailPage from './pages/Campaign/WalkerCampaignDetailPage';
@@ -33,6 +41,13 @@ const router = createBrowserRouter([
         element: <MainLayout />,
         children: [
           { path: '/app', element: <ClientDashboard /> },
+          { path: '/app/onboarding', element: <ClientOnboardingPage /> },
+          { path: '/app/setup', element: <CampaignSetupPage /> },
+          { path: '/app/campaign/:campaignId', element: <ClientCampaignDetailPage /> },
+          { path: '/app/campaign/:campaignId/door/:doorId', element: <DoorDetailPage /> },
+          { path: '/app/flyers', element: <FlyersPage /> },
+          { path: '/app/properties', element: <PropertiesPage /> },
+          { path: '/app/properties/:propertyId', element: <PropertyDetailPage /> },
         ],
       },
     ],
