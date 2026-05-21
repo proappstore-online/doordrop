@@ -1,0 +1,14 @@
+{
+  "name": "doordrop",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/proappstore-online/doordrop.git" },
+  "scripts": {
+    "dev": "pnpm --filter @doordrop/web dev",
+    "build": "pnpm --filter @doordrop/web build",
+    "preview": "pnpm --filter @doordrop/web preview",
+    "typecheck": "pnpm --filter @doordrop/web exec tsc -b",
+    "test": "pnpm --filter @doordrop/web exec tsc -b"
+  }
+}
