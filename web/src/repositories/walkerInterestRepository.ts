@@ -42,9 +42,11 @@ export const WalkerInterestRepository = {
 
   // The votes subcollection on walkerInterests was a half-built feature in the
   // original codebase with no model definition; the port plan dropped it.
-  // Methods kept to preserve the caller surface but throw to surface stale callers.
+  // UI buttons that call castVote still exist (WalkerInterestPanel, WalkersPage)
+  // — making this a silent no-op so clicking them doesn't throw an unhandled
+  // rejection. Future cleanup: remove the vote UI entirely.
   async castVote(_interestId: string, _userId: string): Promise<void> {
-    throw new Error('WalkerInterestRepository.castVote: votes feature was dropped in the PAS port');
+    /* no-op — votes feature dropped */
   },
 
   async hasUserVoted(_interestId: string, _userId: string): Promise<boolean> {
