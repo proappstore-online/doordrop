@@ -5,8 +5,17 @@ import ErrorPage from './pages/error/ErrorPage';
 import MainLayout from './components/layout/MainLayout';
 import PrivateRoute from './routes/PrivateRoute';
 import ClientDashboard from './pages/client/ClientDashboard';
-import WalkerDashboard from './pages/walker/WalkerDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
+
+// Walker pages
+import WalkerCampaignsPage from './pages/walker/WalkerCampaignsPage';
+import WalkerCampaignDetailPage from './pages/Campaign/WalkerCampaignDetailPage';
+import WalkerDeliveryPage from './pages/walker/WalkerDeliveryPage';
+import WalkerDeliverRedirect from './pages/walker/WalkerDeliverRedirect';
+import WalkerDashboardPage from './pages/walker/WalkerDashboardPage';
+import WalkerHistoryPage from './pages/walker/WalkerHistoryPage';
+import WalkerSetupPage from './pages/walker/WalkerSetupPage';
+import DoorDetailPage from './pages/Campaign/DoorDetailPage';
 
 const router = createBrowserRouter([
   { path: '/', element: <LoginPage />, errorElement: <ErrorPage /> },
@@ -34,7 +43,15 @@ const router = createBrowserRouter([
       {
         element: <MainLayout />,
         children: [
-          { path: '/walker', element: <WalkerDashboard /> },
+          { path: '/walker', element: <WalkerCampaignsPage /> },
+          { path: '/walker/dashboard', element: <WalkerDashboardPage /> },
+          { path: '/walker/setup', element: <WalkerSetupPage /> },
+          { path: '/walker/history', element: <WalkerHistoryPage /> },
+          { path: '/walker/streets', element: <WalkerCampaignsPage /> },
+          { path: '/walker/deliver', element: <WalkerDeliverRedirect /> },
+          { path: '/walker/campaign/:campaignId', element: <WalkerCampaignDetailPage /> },
+          { path: '/walker/campaign/:campaignId/deliver', element: <WalkerDeliveryPage /> },
+          { path: '/walker/campaign/:campaignId/door/:doorId', element: <DoorDetailPage /> },
         ],
       },
     ],
