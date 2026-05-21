@@ -108,7 +108,6 @@ const ClientCampaignDetailPage: React.FC = () => {
     dismissError,
     trackPoints: liveTrackPoints,
     trackStops: liveTrackStops,
-    trackSessionId,
     autoStopResult,
     debugInfo: trackingDebugInfo,
     updateDoorVisitedCallback,
@@ -230,25 +229,6 @@ const ClientCampaignDetailPage: React.FC = () => {
 
   const hasRecentActivity = latestTrackPoint ? (Math.floor(Date.now() / 1000) - latestTrackPoint.t < 30) : false;
   const shouldFollowTracker = isTracking || hasRecentActivity;
-
-  const nearbyDoors = useMemo(() => {
-    if (!walkerPosition) return null;
-    const radiusM = campaign?.doorRadiusM || 100;
-    return doors.filter((d) => {
-      if (!d.lat || !d.lng) return false;
-      const R = 6371000;
-      const dLat = ((d.lat - walkerPosition.lat) * Math.PI) / 180;
-      const dLng = ((d.lng - walkerPosition.lng) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos((walkerPosition.lat * Math.PI) / 180) *
-          Math.cos((d.lat * Math.PI) / 180) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c <= radiusM;
-    });
-  }, [walkerPosition, doors, campaign?.doorRadiusM]);
 
   // The DebugPanel that consumed a verbose aggregate debug object was dropped
   // in the port. The component-level DeliveryTrackingPanel reads the SDK's
