@@ -1,0 +1,14 @@
+name = "pas-data-doordrop"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+APP_ID = "doordrop"
+FAS_API_BASE = "https://api.freeappstore.online"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pas-data-doordrop"
+database_id = "7e14b85d-899a-4274-8b0e-ee224f4814de"

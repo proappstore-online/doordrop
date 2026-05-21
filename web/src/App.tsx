@@ -1,33 +1,58 @@
-import { initPro } from '@proappstore/sdk'
-import { useProGate } from '@proappstore/sdk/hooks'
+import { RouterProvider, createBrowserRouter } from 'react-router-dom';
+import LoginPage from './pages/auth/LoginPage';
+import RoleSelectionPage from './pages/auth/RoleSelectionPage';
+import ErrorPage from './pages/error/ErrorPage';
+import MainLayout from './components/layout/MainLayout';
+import PrivateRoute from './routes/PrivateRoute';
+import ClientDashboard from './pages/client/ClientDashboard';
+import WalkerDashboard from './pages/walker/WalkerDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
-const app = initPro({ appId: 'doordrop' })
+const router = createBrowserRouter([
+  { path: '/', element: <LoginPage />, errorElement: <ErrorPage /> },
+  { path: '/login', element: <LoginPage /> },
+  {
+    element: <PrivateRoute />,
+    children: [
+      { path: '/select-role', element: <RoleSelectionPage /> },
+    ],
+  },
+  {
+    element: <PrivateRoute allowedRoles={['client']} />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [
+          { path: '/app', element: <ClientDashboard /> },
+        ],
+      },
+    ],
+  },
+  {
+    element: <PrivateRoute allowedRoles={['walker']} />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [
+          { path: '/walker', element: <WalkerDashboard /> },
+        ],
+      },
+    ],
+  },
+  {
+    element: <PrivateRoute allowedRoles={['admin']} />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [
+          { path: '/admin', element: <AdminDashboard /> },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <ErrorPage /> },
+]);
 
 export default function App() {
-  const { gate, user, signIn } = useProGate(app, { allowFree: true })
-
-  if (gate === 'loading') {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center">
-        <p className="text-[var(--muted)]">Loading...</p>
-      </div>
-    )
-  }
-
-  if (gate === 'signed-out') {
-    return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-4">
-        <h1 className="display-font text-3xl font-bold text-[var(--ink)]">Doordrop</h1>
-        <p className="text-[var(--muted)]">Sign in to get started.</p>
-        <button onClick={signIn} className="rounded-2xl bg-[var(--accent)] px-6 py-2.5 text-sm font-semibold text-white">Sign in with GitHub</button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="display-font text-2xl font-bold text-[var(--ink)]">Doordrop</h1>
-      <p className="mt-2 text-[var(--muted)]">Welcome, {user?.login}! Edit web/src/App.tsx to start building.</p>
-    </div>
-  )
+  return <RouterProvider router={router} />;
 }
