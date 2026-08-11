@@ -6,7 +6,11 @@ workers_dev = true
 
 [vars]
 APP_ID = "doordrop"
-FAS_API_BASE = "https://api.freeappstore.online"
+
+# SESSION_SIGNING_KEY is a SECRET, not a var — set it with
+#   wrangler secret put SESSION_SIGNING_KEY
+# It replaces the old FAS_API_BASE round-trip: sessions are now verified
+# locally instead of by asking FreeAppStore about a ProAppStore token (#71).
 
 [[d1_databases]]
 binding = "DB"
