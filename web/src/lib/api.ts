@@ -11,19 +11,21 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = pas.auth.token;
-  if (!token) throw new ApiError(401, 'not signed in');
+  // Never read `pas.auth.token` (#71): it is null under platform-cookie auth,
+  // where the session lives in an HttpOnly cookie. `authenticatedFetch` attaches
+  // the credential the SDK's mode calls for — a bearer header today, a
+  // same-origin cookie once the app moves to cookie mode.
+  if (!pas.auth.isSignedIn) throw new ApiError(401, 'not signed in');
 
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${token}`);
   if (init.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(`${DATA_API_BASE}${path}`, { ...init, headers });
+  // authenticatedFetch already calls handleUnauthorized() on a 401.
+  const res = await pas.auth.authenticatedFetch(`${DATA_API_BASE}${path}`, { ...init, headers });
 
   if (res.status === 401) {
-    pas.auth.handleUnauthorized();
     throw new ApiError(401, 'session expired');
   }
   if (!res.ok) {

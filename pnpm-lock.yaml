@@ -11,8 +11,8 @@ importers:
   web:
     dependencies:
       '@proappstore/sdk':
-        specifier: ^1.5.0
-        version: 1.9.0(react@19.2.6)
+        specifier: ^1.16.47
+        version: 1.16.47(react@19.2.6)
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -865,9 +865,6 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@freeappstore/sdk@0.7.1':
-    resolution: {integrity: sha512-yxcNe2oVM+ZJf7Lj5odFeQtkXZBMfyT/fR7Tq7XBlOvFSqfXNtmNNiJGuqCHKal/NTNaUcdkEzNkKYlaNzkI/w==}
-
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
@@ -1070,8 +1067,8 @@ packages:
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
-  '@proappstore/sdk@1.9.0':
-    resolution: {integrity: sha512-GqxXtA2sauXyF07Kk841FOcsRsW0EtnZmpUvFqI11ldL/kv/C4VUs2miFQfqF2OqYk7fN8tcGx2/wx1qRzmSLw==}
+  '@proappstore/sdk@1.16.47':
+    resolution: {integrity: sha512-oZbQ+q6wb6tyWBuDg/cgpLDsr3NZxSPv/SQkOR/2P+KEZfUmlsTcoq3+MK7FLM9fO6k4pyyIn+z9HJ50Etmr2g==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
@@ -3702,8 +3699,6 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@freeappstore/sdk@0.7.1': {}
-
   '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -3856,9 +3851,7 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@proappstore/sdk@1.9.0(react@19.2.6)':
-    dependencies:
-      '@freeappstore/sdk': 0.7.1
+  '@proappstore/sdk@1.16.47(react@19.2.6)':
     optionalDependencies:
       react: 19.2.6
 
