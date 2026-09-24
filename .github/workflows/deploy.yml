@@ -79,6 +79,30 @@ jobs:
             --delete --no-progress
           echo "Deployed apps/${{ github.event.repository.name }} from ${{ github.sha }}"
 
+      # doordrop runs its OWN data worker (worker/), not the platform-managed
+      # bundle, so nothing else deploys it (platform #197). Needs a Cloudflare
+      # API token with Workers Scripts:Edit as repo secrets; until they exist
+      # this step reports and skips rather than failing the web deploy above.
+      # SESSION_SIGNING_KEY (the worker verifies PAS sessions locally, #71) is
+      # synced to the worker when present as a repo secret; otherwise set it
+      # once with `wrangler secret put SESSION_SIGNING_KEY` from worker/.
+      - name: Deploy worker
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SESSION_SIGNING_KEY: ${{ secrets.SESSION_SIGNING_KEY }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set — skipping worker deploy (web bundle is already live)"
+            exit 0
+          fi
+          if [ -n "$SESSION_SIGNING_KEY" ]; then
+            printf '%s' "$SESSION_SIGNING_KEY" | pnpm exec wrangler secret put SESSION_SIGNING_KEY
+          fi
+          pnpm exec wrangler deploy
+          echo "Deployed pas-data-doordrop from ${{ github.sha }}"
+
   # Behavioural gate: drive the LIVE app in a real browser (the thing tsc/build
   # can't check). Runs after deploy; a failure fails the run, so the deploy
   # gate routes the ticket back to Dev with the Playwright output. Auth uses a
