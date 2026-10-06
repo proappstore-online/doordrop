@@ -1,0 +1,1256 @@
+{
+  "tools": [
+    {
+      "name": "whoami",
+      "description": "The caller's user id, app role and payment mode",
+      "operation": "query",
+      "sql": "SELECT :__user_id AS id, (SELECT role FROM users WHERE id = :__user_id) AS role, (SELECT payment_mode FROM users WHERE id = :__user_id) AS payment_mode",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "get_me",
+      "description": "The caller's own user row",
+      "operation": "query",
+      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE id = :__user_id",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "create_me",
+      "description": "First-time role pick: create the caller's user row as client or walker (never admin); no-op if it exists",
+      "operation": "execute",
+      "sql": "INSERT OR IGNORE INTO users (id, email, name, photo_url, role, created_at, last_logged_in_at) SELECT :__user_id, :email, COALESCE(:name, :__user_id), :photo_url, :role, :__now, :__now WHERE :role IN ('client', 'walker')",
+      "params": {
+        "role": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "optional": true
+        },
+        "photo_url": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "get_user",
+      "description": "A user by id",
+      "operation": "query",
+      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "list_users",
+      "description": "Users, filtered by role / campaign / address fields",
+      "operation": "query",
+      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE (:role IS NULL OR role = :role) AND (:campaign_id IS NULL OR campaign_id = :campaign_id) AND (:street IS NULL OR street = :street) AND (:suburb IS NULL OR suburb = :suburb) AND (:postcode IS NULL OR postcode = :postcode) AND (:location IS NULL OR location = :location) LIMIT 500",
+      "params": {
+        "role": {
+          "type": "string",
+          "optional": true
+        },
+        "campaign_id": {
+          "type": "string",
+          "optional": true
+        },
+        "street": {
+          "type": "string",
+          "optional": true
+        },
+        "suburb": {
+          "type": "string",
+          "optional": true
+        },
+        "postcode": {
+          "type": "string",
+          "optional": true
+        },
+        "location": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "update_my_user",
+      "description": "Update the caller's own profile; payment_mode can be set once, to direct or platform",
+      "operation": "execute",
+      "sql": "UPDATE users SET email = CASE WHEN json_type(:patch, '$.email') IS NULL THEN email ELSE json_extract(:patch, '$.email') END, name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, photo_url = CASE WHEN json_type(:patch, '$.photo_url') IS NULL THEN photo_url ELSE json_extract(:patch, '$.photo_url') END, client_profile = CASE WHEN json_type(:patch, '$.client_profile') IS NULL THEN client_profile ELSE json_extract(:patch, '$.client_profile') END, walker_profile = CASE WHEN json_type(:patch, '$.walker_profile') IS NULL THEN walker_profile ELSE json_extract(:patch, '$.walker_profile') END, campaign_id = CASE WHEN json_type(:patch, '$.campaign_id') IS NULL THEN campaign_id ELSE json_extract(:patch, '$.campaign_id') END, street = CASE WHEN json_type(:patch, '$.street') IS NULL THEN street ELSE json_extract(:patch, '$.street') END, suburb = CASE WHEN json_type(:patch, '$.suburb') IS NULL THEN suburb ELSE json_extract(:patch, '$.suburb') END, postcode = CASE WHEN json_type(:patch, '$.postcode') IS NULL THEN postcode ELSE json_extract(:patch, '$.postcode') END, state = CASE WHEN json_type(:patch, '$.state') IS NULL THEN state ELSE json_extract(:patch, '$.state') END, country = CASE WHEN json_type(:patch, '$.country') IS NULL THEN country ELSE json_extract(:patch, '$.country') END, location = CASE WHEN json_type(:patch, '$.location') IS NULL THEN location ELSE json_extract(:patch, '$.location') END, phone_number = CASE WHEN json_type(:patch, '$.phone_number') IS NULL THEN phone_number ELSE json_extract(:patch, '$.phone_number') END, bio = CASE WHEN json_type(:patch, '$.bio') IS NULL THEN bio ELSE json_extract(:patch, '$.bio') END, website = CASE WHEN json_type(:patch, '$.website') IS NULL THEN website ELSE json_extract(:patch, '$.website') END, linkedin = CASE WHEN json_type(:patch, '$.linkedin') IS NULL THEN linkedin ELSE json_extract(:patch, '$.linkedin') END, door_count = CASE WHEN json_type(:patch, '$.door_count') IS NULL THEN door_count ELSE json_extract(:patch, '$.door_count') END, delivery_photos = CASE WHEN json_type(:patch, '$.delivery_photos') IS NULL THEN delivery_photos ELSE json_extract(:patch, '$.delivery_photos') END, profile_completed = CASE WHEN json_type(:patch, '$.profile_completed') IS NULL THEN profile_completed ELSE json_extract(:patch, '$.profile_completed') END, payment_mode = CASE WHEN payment_mode IS NULL AND json_extract(:patch, '$.payment_mode') IN ('direct', 'platform') THEN json_extract(:patch, '$.payment_mode') ELSE payment_mode END, updated_at = :__now WHERE id = :__user_id",
+      "params": {
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "admin_update_user",
+      "description": "Admin: update any user's profile, payment_mode included",
+      "operation": "execute",
+      "sql": "UPDATE users SET email = CASE WHEN json_type(:patch, '$.email') IS NULL THEN email ELSE json_extract(:patch, '$.email') END, name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, photo_url = CASE WHEN json_type(:patch, '$.photo_url') IS NULL THEN photo_url ELSE json_extract(:patch, '$.photo_url') END, client_profile = CASE WHEN json_type(:patch, '$.client_profile') IS NULL THEN client_profile ELSE json_extract(:patch, '$.client_profile') END, walker_profile = CASE WHEN json_type(:patch, '$.walker_profile') IS NULL THEN walker_profile ELSE json_extract(:patch, '$.walker_profile') END, campaign_id = CASE WHEN json_type(:patch, '$.campaign_id') IS NULL THEN campaign_id ELSE json_extract(:patch, '$.campaign_id') END, street = CASE WHEN json_type(:patch, '$.street') IS NULL THEN street ELSE json_extract(:patch, '$.street') END, suburb = CASE WHEN json_type(:patch, '$.suburb') IS NULL THEN suburb ELSE json_extract(:patch, '$.suburb') END, postcode = CASE WHEN json_type(:patch, '$.postcode') IS NULL THEN postcode ELSE json_extract(:patch, '$.postcode') END, state = CASE WHEN json_type(:patch, '$.state') IS NULL THEN state ELSE json_extract(:patch, '$.state') END, country = CASE WHEN json_type(:patch, '$.country') IS NULL THEN country ELSE json_extract(:patch, '$.country') END, location = CASE WHEN json_type(:patch, '$.location') IS NULL THEN location ELSE json_extract(:patch, '$.location') END, phone_number = CASE WHEN json_type(:patch, '$.phone_number') IS NULL THEN phone_number ELSE json_extract(:patch, '$.phone_number') END, bio = CASE WHEN json_type(:patch, '$.bio') IS NULL THEN bio ELSE json_extract(:patch, '$.bio') END, website = CASE WHEN json_type(:patch, '$.website') IS NULL THEN website ELSE json_extract(:patch, '$.website') END, linkedin = CASE WHEN json_type(:patch, '$.linkedin') IS NULL THEN linkedin ELSE json_extract(:patch, '$.linkedin') END, door_count = CASE WHEN json_type(:patch, '$.door_count') IS NULL THEN door_count ELSE json_extract(:patch, '$.door_count') END, delivery_photos = CASE WHEN json_type(:patch, '$.delivery_photos') IS NULL THEN delivery_photos ELSE json_extract(:patch, '$.delivery_photos') END, profile_completed = CASE WHEN json_type(:patch, '$.profile_completed') IS NULL THEN profile_completed ELSE json_extract(:patch, '$.profile_completed') END, payment_mode = CASE WHEN json_type(:patch, '$.payment_mode') IS NULL THEN payment_mode ELSE json_extract(:patch, '$.payment_mode') END, updated_at = :__now WHERE id = :id AND EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "admin_delete_user",
+      "description": "Admin: delete a user",
+      "operation": "execute",
+      "sql": "DELETE FROM users WHERE id = :id AND EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "admin_set_user_role",
+      "description": "Admin: set a user's role; an admin cannot demote themselves",
+      "operation": "execute",
+      "sql": "UPDATE users SET role = :role, updated_at = :__now WHERE id = :id AND :role IN ('client', 'walker', 'admin') AND NOT (:id = :__user_id AND :role <> 'admin') AND EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_campaigns",
+      "description": "Campaigns, filtered by status list / admin / assigned walker / suburb / postcode, newest first",
+      "operation": "query",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE (:statuses IS NULL OR c.status IN (SELECT value FROM json_each(:statuses))) AND (:admin_id IS NULL OR EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :admin_id)) AND (:walker_id IS NULL OR c.assigned_walker_id = :walker_id) AND (:suburb IS NULL OR c.suburb = :suburb) AND (:postcode IS NULL OR c.postcode = :postcode) ORDER BY c.created_at DESC LIMIT 500",
+      "params": {
+        "statuses": {
+          "type": "string",
+          "optional": true,
+          "description": "JSON array of statuses"
+        },
+        "admin_id": {
+          "type": "string",
+          "optional": true
+        },
+        "walker_id": {
+          "type": "string",
+          "optional": true
+        },
+        "suburb": {
+          "type": "string",
+          "optional": true
+        },
+        "postcode": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "get_campaign",
+      "description": "A campaign by id",
+      "operation": "query",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "campaign_access",
+      "description": "The caller's standing on a campaign: campaign admin, assigned walker, app admin",
+      "operation": "query",
+      "sql": "SELECT :__user_id AS user_id, c.id, c.name, c.assigned_walker_id, EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = c.id AND aj.value = :__user_id) AS is_admin, COALESCE(c.assigned_walker_id = :__user_id, 0) AS is_walker, EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') AS is_platform_admin FROM campaigns c WHERE c.id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "create_campaign",
+      "description": "Create a campaign; the caller must be one of its admin_ids",
+      "operation": "execute",
+      "sql": "INSERT INTO campaigns (id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at) SELECT :id, :name, :name_key, :street_name, :suburb, :postcode, :state, :country, :plan_type, :status, :admin_ids, :member_ids, :assigned_walker_id, :schedule_rule, :user_payment, :total_doors, :budget, :due_date, :lat, :lng, :door_radius_m, :junk_mail_policy, :property_filter, :business_categories, :active_printout_id, :job_status, :__now, :__now WHERE EXISTS (SELECT 1 FROM json_each(:admin_ids) j WHERE j.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "name_key": {
+          "type": "string",
+          "optional": true
+        },
+        "street_name": {
+          "type": "string",
+          "optional": true
+        },
+        "suburb": {
+          "type": "string",
+          "optional": true
+        },
+        "postcode": {
+          "type": "string",
+          "optional": true
+        },
+        "state": {
+          "type": "string",
+          "optional": true
+        },
+        "country": {
+          "type": "string",
+          "optional": true
+        },
+        "plan_type": {
+          "type": "string",
+          "optional": true
+        },
+        "status": {
+          "type": "string",
+          "default": "draft"
+        },
+        "admin_ids": {
+          "type": "string",
+          "description": "JSON array of user ids"
+        },
+        "member_ids": {
+          "type": "string",
+          "optional": true
+        },
+        "assigned_walker_id": {
+          "type": "string",
+          "optional": true
+        },
+        "schedule_rule": {
+          "type": "string",
+          "optional": true
+        },
+        "user_payment": {
+          "type": "string",
+          "optional": true
+        },
+        "total_doors": {
+          "type": "number",
+          "optional": true
+        },
+        "budget": {
+          "type": "number",
+          "optional": true
+        },
+        "due_date": {
+          "type": "number",
+          "optional": true
+        },
+        "lat": {
+          "type": "number",
+          "optional": true
+        },
+        "lng": {
+          "type": "number",
+          "optional": true
+        },
+        "door_radius_m": {
+          "type": "number",
+          "optional": true
+        },
+        "junk_mail_policy": {
+          "type": "string",
+          "optional": true
+        },
+        "property_filter": {
+          "type": "string",
+          "optional": true
+        },
+        "business_categories": {
+          "type": "string",
+          "optional": true
+        },
+        "active_printout_id": {
+          "type": "string",
+          "optional": true
+        },
+        "job_status": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_campaign",
+      "description": "Campaign admin: update a campaign",
+      "operation": "execute",
+      "sql": "UPDATE campaigns SET name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, name_key = CASE WHEN json_type(:patch, '$.name_key') IS NULL THEN name_key ELSE json_extract(:patch, '$.name_key') END, street_name = CASE WHEN json_type(:patch, '$.street_name') IS NULL THEN street_name ELSE json_extract(:patch, '$.street_name') END, suburb = CASE WHEN json_type(:patch, '$.suburb') IS NULL THEN suburb ELSE json_extract(:patch, '$.suburb') END, postcode = CASE WHEN json_type(:patch, '$.postcode') IS NULL THEN postcode ELSE json_extract(:patch, '$.postcode') END, state = CASE WHEN json_type(:patch, '$.state') IS NULL THEN state ELSE json_extract(:patch, '$.state') END, country = CASE WHEN json_type(:patch, '$.country') IS NULL THEN country ELSE json_extract(:patch, '$.country') END, plan_type = CASE WHEN json_type(:patch, '$.plan_type') IS NULL THEN plan_type ELSE json_extract(:patch, '$.plan_type') END, status = CASE WHEN json_type(:patch, '$.status') IS NULL THEN status ELSE json_extract(:patch, '$.status') END, admin_ids = CASE WHEN json_type(:patch, '$.admin_ids') IS NULL THEN admin_ids ELSE json_extract(:patch, '$.admin_ids') END, member_ids = CASE WHEN json_type(:patch, '$.member_ids') IS NULL THEN member_ids ELSE json_extract(:patch, '$.member_ids') END, assigned_walker_id = CASE WHEN json_type(:patch, '$.assigned_walker_id') IS NULL THEN assigned_walker_id ELSE json_extract(:patch, '$.assigned_walker_id') END, schedule_rule = CASE WHEN json_type(:patch, '$.schedule_rule') IS NULL THEN schedule_rule ELSE json_extract(:patch, '$.schedule_rule') END, user_payment = CASE WHEN json_type(:patch, '$.user_payment') IS NULL THEN user_payment ELSE json_extract(:patch, '$.user_payment') END, total_doors = CASE WHEN json_type(:patch, '$.total_doors') IS NULL THEN total_doors ELSE json_extract(:patch, '$.total_doors') END, budget = CASE WHEN json_type(:patch, '$.budget') IS NULL THEN budget ELSE json_extract(:patch, '$.budget') END, due_date = CASE WHEN json_type(:patch, '$.due_date') IS NULL THEN due_date ELSE json_extract(:patch, '$.due_date') END, completed_at = CASE WHEN json_type(:patch, '$.completed_at') IS NULL THEN completed_at ELSE json_extract(:patch, '$.completed_at') END, archived_at = CASE WHEN json_type(:patch, '$.archived_at') IS NULL THEN archived_at ELSE json_extract(:patch, '$.archived_at') END, lat = CASE WHEN json_type(:patch, '$.lat') IS NULL THEN lat ELSE json_extract(:patch, '$.lat') END, lng = CASE WHEN json_type(:patch, '$.lng') IS NULL THEN lng ELSE json_extract(:patch, '$.lng') END, door_radius_m = CASE WHEN json_type(:patch, '$.door_radius_m') IS NULL THEN door_radius_m ELSE json_extract(:patch, '$.door_radius_m') END, junk_mail_policy = CASE WHEN json_type(:patch, '$.junk_mail_policy') IS NULL THEN junk_mail_policy ELSE json_extract(:patch, '$.junk_mail_policy') END, property_filter = CASE WHEN json_type(:patch, '$.property_filter') IS NULL THEN property_filter ELSE json_extract(:patch, '$.property_filter') END, business_categories = CASE WHEN json_type(:patch, '$.business_categories') IS NULL THEN business_categories ELSE json_extract(:patch, '$.business_categories') END, active_printout_id = CASE WHEN json_type(:patch, '$.active_printout_id') IS NULL THEN active_printout_id ELSE json_extract(:patch, '$.active_printout_id') END, job_status = CASE WHEN json_type(:patch, '$.job_status') IS NULL THEN job_status ELSE json_extract(:patch, '$.job_status') END, updated_at = :__now WHERE id = :id AND (json_type(:patch, '$.admin_ids') IS NULL OR json_type(:patch, '$.admin_ids') = 'array') AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "notify_walker_assigned",
+      "description": "Campaign admin: notify a campaign's newly assigned walker",
+      "operation": "execute",
+      "sql": "INSERT INTO notifications (id, user_id, type, title, body, campaign_id, read, created_at) SELECT :__uuid, c.assigned_walker_id, 'walker_assigned', 'You''ve been assigned!', 'You''re delivering for ' || c.name, c.id, 0, :__now FROM campaigns c WHERE c.id = :campaign_id AND c.assigned_walker_id = :walker_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = c.id AND aj.value = :__user_id)",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        },
+        "walker_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_campaign",
+      "description": "Campaign admin: delete a campaign",
+      "operation": "execute",
+      "sql": "DELETE FROM campaigns WHERE id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_doors",
+      "description": "A campaign's doors",
+      "operation": "query",
+      "sql": "SELECT * FROM doors WHERE campaign_id = :campaign_id ORDER BY street_name, house_number",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "create_door",
+      "description": "Campaign admin: add a door",
+      "operation": "execute",
+      "sql": "INSERT INTO doors (id, campaign_id, address, street_name, house_number, lat, lng, status, delivered_at, delivered_by, delivery_count, history, property_id) SELECT :id, :campaign_id, :address, :street_name, :house_number, :lat, :lng, :status, NULL, NULL, 0, '[]', :property_id WHERE EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "street_name": {
+          "type": "string",
+          "optional": true
+        },
+        "house_number": {
+          "type": "string",
+          "optional": true
+        },
+        "lat": {
+          "type": "number",
+          "optional": true
+        },
+        "lng": {
+          "type": "number",
+          "optional": true
+        },
+        "status": {
+          "type": "string",
+          "default": "pending"
+        },
+        "property_id": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_door_as_admin",
+      "description": "Campaign admin: update any field of a door",
+      "operation": "execute",
+      "sql": "UPDATE doors SET address = CASE WHEN json_type(:patch, '$.address') IS NULL THEN address ELSE json_extract(:patch, '$.address') END, street_name = CASE WHEN json_type(:patch, '$.street_name') IS NULL THEN street_name ELSE json_extract(:patch, '$.street_name') END, house_number = CASE WHEN json_type(:patch, '$.house_number') IS NULL THEN house_number ELSE json_extract(:patch, '$.house_number') END, lat = CASE WHEN json_type(:patch, '$.lat') IS NULL THEN lat ELSE json_extract(:patch, '$.lat') END, lng = CASE WHEN json_type(:patch, '$.lng') IS NULL THEN lng ELSE json_extract(:patch, '$.lng') END, status = CASE WHEN json_type(:patch, '$.status') IS NULL THEN status ELSE json_extract(:patch, '$.status') END, delivered_at = CASE WHEN json_type(:patch, '$.delivered_at') IS NULL THEN delivered_at ELSE json_extract(:patch, '$.delivered_at') END, delivered_by = CASE WHEN json_type(:patch, '$.delivered_by') IS NULL THEN delivered_by ELSE json_extract(:patch, '$.delivered_by') END, delivery_count = CASE WHEN json_type(:patch, '$.delivery_count') IS NULL THEN delivery_count ELSE json_extract(:patch, '$.delivery_count') END, history = CASE WHEN json_type(:patch, '$.history') IS NULL THEN history ELSE json_extract(:patch, '$.history') END, property_id = CASE WHEN json_type(:patch, '$.property_id') IS NULL THEN property_id ELSE json_extract(:patch, '$.property_id') END WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_door_as_walker",
+      "description": "Assigned walker: record a door's delivery; delivered_by can only be the caller",
+      "operation": "execute",
+      "sql": "UPDATE doors SET status = CASE WHEN json_type(:patch, '$.status') IS NULL THEN status ELSE json_extract(:patch, '$.status') END, delivered_at = CASE WHEN json_type(:patch, '$.delivered_at') IS NULL THEN delivered_at ELSE json_extract(:patch, '$.delivered_at') END, delivered_by = CASE WHEN json_type(:patch, '$.delivered_by') IS NULL THEN delivered_by ELSE json_extract(:patch, '$.delivered_by') END, delivery_count = CASE WHEN json_type(:patch, '$.delivery_count') IS NULL THEN delivery_count ELSE json_extract(:patch, '$.delivery_count') END, history = CASE WHEN json_type(:patch, '$.history') IS NULL THEN history ELSE json_extract(:patch, '$.history') END WHERE id = :id AND campaign_id = :campaign_id AND (json_type(:patch, '$.delivered_by') IS NULL OR json_extract(:patch, '$.delivered_by') = :__user_id) AND EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_door",
+      "description": "Campaign admin: delete a door",
+      "operation": "execute",
+      "sql": "DELETE FROM doors WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_printouts",
+      "description": "A campaign's printouts, newest version first",
+      "operation": "query",
+      "sql": "SELECT * FROM printouts WHERE campaign_id = :campaign_id ORDER BY version DESC",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "create_printout",
+      "description": "Campaign admin: add a printout",
+      "operation": "execute",
+      "sql": "INSERT INTO printouts (id, campaign_id, version, name, description, file_url, flyer_id, created_at, created_by) SELECT :id, :campaign_id, :version, :name, :description, :file_url, :flyer_id, :__now, :__user_id WHERE length(:name) BETWEEN 1 AND 200 AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number",
+          "default": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "optional": true
+        },
+        "file_url": {
+          "type": "string",
+          "optional": true
+        },
+        "flyer_id": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_printout",
+      "description": "Campaign admin: update a printout",
+      "operation": "execute",
+      "sql": "UPDATE printouts SET version = CASE WHEN json_type(:patch, '$.version') IS NULL THEN version ELSE json_extract(:patch, '$.version') END, name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, description = CASE WHEN json_type(:patch, '$.description') IS NULL THEN description ELSE json_extract(:patch, '$.description') END, file_url = CASE WHEN json_type(:patch, '$.file_url') IS NULL THEN file_url ELSE json_extract(:patch, '$.file_url') END, flyer_id = CASE WHEN json_type(:patch, '$.flyer_id') IS NULL THEN flyer_id ELSE json_extract(:patch, '$.flyer_id') END WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_printout",
+      "description": "Campaign admin: delete a printout",
+      "operation": "execute",
+      "sql": "DELETE FROM printouts WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_my_flyers",
+      "description": "The caller's flyers, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM flyers WHERE owner_id = :__user_id ORDER BY created_at DESC",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "create_flyer",
+      "description": "Create a flyer owned by the caller",
+      "operation": "execute",
+      "sql": "INSERT INTO flyers (id, owner_id, name, description, file_url, created_at, created_by) SELECT :id, :__user_id, :name, :description, :file_url, :__now, :__user_id WHERE length(:name) BETWEEN 1 AND 200",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "optional": true
+        },
+        "file_url": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_flyer",
+      "description": "Update one of the caller's flyers",
+      "operation": "execute",
+      "sql": "UPDATE flyers SET name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, description = CASE WHEN json_type(:patch, '$.description') IS NULL THEN description ELSE json_extract(:patch, '$.description') END, file_url = CASE WHEN json_type(:patch, '$.file_url') IS NULL THEN file_url ELSE json_extract(:patch, '$.file_url') END WHERE id = :id AND owner_id = :__user_id AND (json_type(:patch, '$.name') IS NULL OR length(json_extract(:patch, '$.name')) <= 200)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_flyer",
+      "description": "Delete one of the caller's flyers",
+      "operation": "execute",
+      "sql": "DELETE FROM flyers WHERE id = :id AND owner_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_my_properties",
+      "description": "Properties the caller has access to, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM properties p WHERE EXISTS (SELECT 1 FROM json_each(p.access_user_ids) j WHERE j.value = :__user_id) ORDER BY p.created_at DESC LIMIT 500",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "upsert_property",
+      "description": "Create a property, or add the caller to an existing one (by its address-derived id)",
+      "operation": "execute",
+      "sql": "INSERT INTO properties (id, address, street_name, house_number, suburb, postcode, state, lat, lng, commercial, access_user_ids, created_at) VALUES (:id, :address, :street_name, :house_number, :suburb, :postcode, :state, :lat, :lng, :commercial, json_array(:__user_id), :__now) ON CONFLICT(id) DO UPDATE SET access_user_ids = CASE WHEN EXISTS (SELECT 1 FROM json_each(properties.access_user_ids) j WHERE j.value = :__user_id) THEN properties.access_user_ids ELSE json_insert(properties.access_user_ids, '$[#]', :__user_id) END",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "street_name": {
+          "type": "string",
+          "optional": true
+        },
+        "house_number": {
+          "type": "string",
+          "optional": true
+        },
+        "suburb": {
+          "type": "string"
+        },
+        "postcode": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "optional": true
+        },
+        "lat": {
+          "type": "number",
+          "optional": true
+        },
+        "lng": {
+          "type": "number",
+          "optional": true
+        },
+        "commercial": {
+          "type": "integer",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "get_property",
+      "description": "A property the caller has access to",
+      "operation": "query",
+      "sql": "SELECT * FROM properties p WHERE p.id = :id AND EXISTS (SELECT 1 FROM properties pa, json_each(pa.access_user_ids) pj WHERE pa.id = p.id AND pj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "property_access",
+      "description": "Whether the caller has access to a property (no row: it does not exist)",
+      "operation": "query",
+      "sql": "SELECT EXISTS (SELECT 1 FROM properties pa, json_each(pa.access_user_ids) pj WHERE pa.id = p.id AND pj.value = :__user_id) AS has_access FROM properties p WHERE p.id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_property",
+      "description": "Update a property the caller has access to; access_user_ids can grow, never shrink",
+      "operation": "execute",
+      "sql": "UPDATE properties SET address = CASE WHEN json_type(:patch, '$.address') IS NULL THEN address ELSE json_extract(:patch, '$.address') END, street_name = CASE WHEN json_type(:patch, '$.street_name') IS NULL THEN street_name ELSE json_extract(:patch, '$.street_name') END, house_number = CASE WHEN json_type(:patch, '$.house_number') IS NULL THEN house_number ELSE json_extract(:patch, '$.house_number') END, suburb = CASE WHEN json_type(:patch, '$.suburb') IS NULL THEN suburb ELSE json_extract(:patch, '$.suburb') END, postcode = CASE WHEN json_type(:patch, '$.postcode') IS NULL THEN postcode ELSE json_extract(:patch, '$.postcode') END, state = CASE WHEN json_type(:patch, '$.state') IS NULL THEN state ELSE json_extract(:patch, '$.state') END, lat = CASE WHEN json_type(:patch, '$.lat') IS NULL THEN lat ELSE json_extract(:patch, '$.lat') END, lng = CASE WHEN json_type(:patch, '$.lng') IS NULL THEN lng ELSE json_extract(:patch, '$.lng') END, commercial = CASE WHEN json_type(:patch, '$.commercial') IS NULL THEN commercial ELSE json_extract(:patch, '$.commercial') END, access_user_ids = CASE WHEN json_type(:patch, '$.access_user_ids') IS NULL THEN access_user_ids ELSE json_extract(:patch, '$.access_user_ids') END WHERE id = :id AND (json_type(:patch, '$.access_user_ids') IS NULL OR (json_type(:patch, '$.access_user_ids') = 'array' AND NOT EXISTS (SELECT 1 FROM json_each(properties.access_user_ids) o WHERE o.value NOT IN (SELECT n.value FROM json_each(:patch, '$.access_user_ids') n)))) AND EXISTS (SELECT 1 FROM properties pa, json_each(pa.access_user_ids) pj WHERE pa.id = :id AND pj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object of the columns to change"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "create_property_report",
+      "description": "Report a problem with a property the caller has access to",
+      "operation": "execute",
+      "sql": "INSERT INTO property_reports (id, property_id, reason, photo_url, notes, reported_at, reported_by, campaign_id) SELECT :id, :property_id, :reason, :photo_url, :notes, :__now, :__user_id, :campaign_id WHERE EXISTS (SELECT 1 FROM properties pa, json_each(pa.access_user_ids) pj WHERE pa.id = :property_id AND pj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "property_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "photo_url": {
+          "type": "string",
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": true
+        },
+        "campaign_id": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_property_reports",
+      "description": "Reports on a property the caller has access to, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM property_reports WHERE property_id = :property_id AND EXISTS (SELECT 1 FROM properties pa, json_each(pa.access_user_ids) pj WHERE pa.id = :property_id AND pj.value = :__user_id) ORDER BY reported_at DESC",
+      "params": {
+        "property_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_interests",
+      "description": "Walker interests, filtered by walker / campaign, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM walker_interests WHERE (:walker_id IS NULL OR walker_id = :walker_id) AND (:campaign_id IS NULL OR campaign_id = :campaign_id) ORDER BY created_at DESC LIMIT 500",
+      "params": {
+        "walker_id": {
+          "type": "string",
+          "optional": true
+        },
+        "campaign_id": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "create_interest",
+      "description": "Register the caller's interest in a campaign and notify its admins (no-op if already interested)",
+      "operation": "batch",
+      "statements": [
+        "INSERT OR IGNORE INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) SELECT :id, :__user_id, c.id, :__now, :__now FROM campaigns c WHERE c.id = :campaign_id",
+        "INSERT INTO notifications (id, user_id, type, title, body, campaign_id, read, created_at) SELECT lower(hex(randomblob(16))), j.value, 'walker_interested', 'New walker interested', COALESCE((SELECT u.name FROM users u WHERE u.id = :__user_id), :__user_id) || ' wants to deliver for ' || c.name, c.id, 0, :__now FROM campaigns c, json_each(c.admin_ids) j WHERE c.id = :campaign_id AND EXISTS (SELECT 1 FROM walker_interests i WHERE i.id = :id AND i.walker_id = :__user_id AND i.created_at = :__now)"
+      ],
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "interest_owner",
+      "description": "Whether the caller owns a walker interest (no row: it does not exist)",
+      "operation": "query",
+      "sql": "SELECT walker_id = :__user_id AS mine FROM walker_interests WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_my_interest",
+      "description": "Withdraw one of the caller's walker interests",
+      "operation": "execute",
+      "sql": "DELETE FROM walker_interests WHERE id = :id AND walker_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_walker_reviews",
+      "description": "A walker's reviews, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM walker_reviews WHERE walker_id = :walker_id ORDER BY created_at DESC LIMIT 500",
+      "params": {
+        "walker_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "create_review",
+      "description": "Review a walker as the caller",
+      "operation": "execute",
+      "sql": "INSERT INTO walker_reviews (id, walker_id, reviewer_id, reviewer_name, campaign_id, schedule_id, rating, comment, created_at, updated_at) SELECT :id, :walker_id, :__user_id, :reviewer_name, :campaign_id, :schedule_id, :rating, :comment, :__now, :__now WHERE :rating BETWEEN 1 AND 5 AND (:comment IS NULL OR length(:comment) <= 2000)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "walker_id": {
+          "type": "string"
+        },
+        "reviewer_name": {
+          "type": "string",
+          "optional": true
+        },
+        "campaign_id": {
+          "type": "string",
+          "optional": true
+        },
+        "schedule_id": {
+          "type": "string",
+          "optional": true
+        },
+        "rating": {
+          "type": "number"
+        },
+        "comment": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "review_owner",
+      "description": "Whether the caller wrote a review (no row: it does not exist)",
+      "operation": "query",
+      "sql": "SELECT reviewer_id = :__user_id AS mine FROM walker_reviews WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "update_my_review",
+      "description": "Change the rating or comment of one of the caller's reviews",
+      "operation": "execute",
+      "sql": "UPDATE walker_reviews SET rating = COALESCE(:rating, rating), comment = COALESCE(:comment, comment), updated_at = :__now WHERE id = :id AND reviewer_id = :__user_id AND (:rating IS NULL OR :rating BETWEEN 1 AND 5) AND (:comment IS NULL OR length(:comment) <= 2000)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "rating": {
+          "type": "number",
+          "optional": true
+        },
+        "comment": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "delete_my_review",
+      "description": "Delete one of the caller's reviews",
+      "operation": "execute",
+      "sql": "DELETE FROM walker_reviews WHERE id = :id AND reviewer_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_history",
+      "description": "Delivery history records, optionally for one walker, newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM history_records WHERE (:walker_id IS NULL OR walker_id = :walker_id) ORDER BY date DESC LIMIT 500",
+      "params": {
+        "walker_id": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+        }
+      }
+    },
+    {
+      "name": "create_history",
+      "description": "Record a delivery history entry for the caller",
+      "operation": "execute",
+      "sql": "INSERT INTO history_records (id, walker_id, date, street_name, income, door_count, duration_min) VALUES (:id, :__user_id, :date, :street_name, :income, :door_count, :duration_min)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "date": {
+          "type": "number"
+        },
+        "street_name": {
+          "type": "string",
+          "optional": true
+        },
+        "income": {
+          "type": "number",
+          "optional": true
+        },
+        "door_count": {
+          "type": "number",
+          "optional": true
+        },
+        "duration_min": {
+          "type": "number",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "admin_delete_history",
+      "description": "Admin: delete a history record",
+      "operation": "execute",
+      "sql": "DELETE FROM history_records WHERE id = :id AND EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_my_notifications",
+      "description": "The caller's notifications (optionally unread only), newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM notifications WHERE user_id = :__user_id AND (:unread = 0 OR read = 0) ORDER BY created_at DESC LIMIT 200",
+      "params": {
+        "unread": {
+          "type": "integer",
+          "default": 0
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "notification_owner",
+      "description": "Whether a notification is the caller's (no row: it does not exist)",
+      "operation": "query",
+      "sql": "SELECT user_id = :__user_id AS mine FROM notifications WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "set_notification_read",
+      "description": "Mark one of the caller's notifications read or unread",
+      "operation": "execute",
+      "sql": "UPDATE notifications SET read = :read WHERE id = :id AND user_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "read": {
+          "type": "integer"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "mark_all_notifications_read",
+      "description": "Mark all the caller's notifications read",
+      "operation": "execute",
+      "sql": "UPDATE notifications SET read = 1 WHERE user_id = :__user_id AND read = 0",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "list_campaign_notes",
+      "description": "A campaign's notes (campaign admin or assigned walker), oldest first, optionally after a time",
+      "operation": "query",
+      "sql": "SELECT * FROM campaign_notes WHERE campaign_id = :campaign_id AND (:since IS NULL OR created_at > :since) AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)) ORDER BY created_at ASC LIMIT 500",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        },
+        "since": {
+          "type": "number",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "create_campaign_note",
+      "description": "Post a note on a campaign (campaign admin or assigned walker)",
+      "operation": "execute",
+      "sql": "INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) SELECT :id, :campaign_id, :__user_id, :user_name, :text, :created_at WHERE length(:text) BETWEEN 1 AND 5000 AND length(:user_name) BETWEEN 1 AND 200 AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id))",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "user_name": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "number"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "set_chat_read_state",
+      "description": "Mark a campaign's chat read for the caller",
+      "operation": "execute",
+      "sql": "INSERT INTO chat_read_state (user_id, campaign_id, last_read_at) VALUES (:__user_id, :campaign_id, :__now) ON CONFLICT(user_id, campaign_id) DO UPDATE SET last_read_at = excluded.last_read_at",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_my_chat_read_state",
+      "description": "The caller's chat read state per campaign",
+      "operation": "query",
+      "sql": "SELECT campaign_id, last_read_at FROM chat_read_state WHERE user_id = :__user_id",
+      "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "start_track_session",
+      "description": "Assigned walker: start a tracking session on the caller's campaign",
+      "operation": "execute",
+      "sql": "INSERT INTO track_sessions (id, campaign_id, walker_id, started_at, ended_at) SELECT :id, :campaign_id, :__user_id, :__now, NULL WHERE EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_track_sessions",
+      "description": "A campaign's tracking sessions (campaign admin, assigned walker or app admin), newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM track_sessions WHERE campaign_id = :campaign_id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY started_at DESC LIMIT 200",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "track_session_access",
+      "description": "The caller's standing on a tracking session (no row: it does not exist)",
+      "operation": "query",
+      "sql": "SELECT s.walker_id = :__user_id AS is_owner, EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = s.campaign_id AND aj.value = :__user_id) AS is_campaign_admin FROM track_sessions s WHERE s.id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "append_track_point",
+      "description": "Append a GPS point to the caller's own tracking session",
+      "operation": "execute",
+      "sql": "INSERT OR IGNORE INTO track_points (session_id, t, lat, lng, speed) SELECT :session_id, :t, :lat, :lng, :speed WHERE EXISTS (SELECT 1 FROM track_sessions s WHERE s.id = :session_id AND s.walker_id = :__user_id)",
+      "params": {
+        "session_id": {
+          "type": "string"
+        },
+        "t": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number",
+          "optional": true
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "append_track_stop",
+      "description": "Append a stop to the caller's own tracking session",
+      "operation": "execute",
+      "sql": "INSERT INTO track_stops (id, session_id, lat, lng, start_time, end_time) SELECT :__uuid, :session_id, :lat, :lng, :start_time, :end_time WHERE EXISTS (SELECT 1 FROM track_sessions s WHERE s.id = :session_id AND s.walker_id = :__user_id)",
+      "params": {
+        "session_id": {
+          "type": "string"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "lng": {
+          "type": "number"
+        },
+        "start_time": {
+          "type": "number"
+        },
+        "end_time": {
+          "type": "number"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "end_track_session",
+      "description": "End the caller's own tracking session",
+      "operation": "execute",
+      "sql": "UPDATE track_sessions SET ended_at = :ended_at WHERE id = :id AND walker_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "ended_at": {
+          "type": "number"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "get_track_session",
+      "description": "A tracking session (its walker or a campaign admin)",
+      "operation": "query",
+      "sql": "SELECT s.* FROM track_sessions s WHERE s.id = :id AND EXISTS (SELECT 1 FROM track_sessions sv WHERE sv.id = s.id AND (sv.walker_id = :__user_id OR EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = sv.campaign_id AND aj.value = :__user_id)))",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_track_points",
+      "description": "A tracking session's GPS points (its walker or a campaign admin)",
+      "operation": "query",
+      "sql": "SELECT t, lat, lng, speed FROM track_points WHERE session_id = :session_id AND EXISTS (SELECT 1 FROM track_sessions sv WHERE sv.id = :session_id AND (sv.walker_id = :__user_id OR EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = sv.campaign_id AND aj.value = :__user_id))) ORDER BY t",
+      "params": {
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_track_stops",
+      "description": "A tracking session's stops (its walker or a campaign admin)",
+      "operation": "query",
+      "sql": "SELECT lat, lng, start_time AS startTime, end_time AS endTime FROM track_stops WHERE session_id = :session_id AND EXISTS (SELECT 1 FROM track_sessions sv WHERE sv.id = :session_id AND (sv.walker_id = :__user_id OR EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = sv.campaign_id AND aj.value = :__user_id))) ORDER BY start_time",
+      "params": {
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "get_platform_config",
+      "description": "The app's payment-mode default",
+      "operation": "query",
+      "sql": "SELECT default_payment_mode FROM platform_config WHERE id = 'platform'",
+      "params": {},
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "App-wide setting every signed-in user reads; holds no user data."
+        }
+      }
+    },
+    {
+      "name": "set_platform_config",
+      "description": "Admin: set the app's payment-mode default",
+      "operation": "execute",
+      "sql": "INSERT INTO platform_config (id, default_payment_mode) SELECT 'platform', :default_payment_mode WHERE EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') ON CONFLICT(id) DO UPDATE SET default_payment_mode = excluded.default_payment_mode",
+      "params": {
+        "default_payment_mode": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    }
+  ]
+}

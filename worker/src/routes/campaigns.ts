@@ -1,23 +1,14 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Env } from '../env.js';
-import { requireAuth, requireCampaignAdmin } from '../auth.js';
-import { fromJson, newId, now, toJson } from '../lib.js';
+import { requireCampaignAdmin, whoami } from '../auth.js';
+import { batch, first, rows, run, type AppEnv, type Params, type Row } from '../pas.js';
+import { fromJson, newId, pickDefined, toJson } from '../lib.js';
 
-const router = new Hono<{ Bindings: Env }>();
+const router = new Hono<AppEnv>();
 
 const VALID_STATUSES = new Set(['draft', 'ready', 'assigned', 'complete', 'review', 'payment', 'archive']);
 
-const CAMPAIGN_COLUMNS = [
-  'id', 'name', 'name_key', 'street_name', 'suburb', 'postcode', 'state', 'country',
-  'plan_type', 'status', 'admin_ids', 'member_ids', 'assigned_walker_id', 'schedule_rule',
-  'user_payment', 'total_doors', 'budget', 'due_date', 'completed_at', 'archived_at',
-  'lat', 'lng', 'door_radius_m', 'junk_mail_policy', 'property_filter',
-  'business_categories', 'active_printout_id', 'job_status',
-  'created_at', 'updated_at',
-].join(', ');
-
-function hydrate(row: Record<string, unknown>): Record<string, unknown> {
+function hydrate(row: Row): Row {
   return {
     ...row,
     admin_ids: fromJson<string[]>(row.admin_ids as string | null, []),
@@ -29,38 +20,24 @@ function hydrate(row: Record<string, unknown>): Record<string, unknown> {
 }
 
 router.get('/campaigns', async (c) => {
-  await requireAuth(c);
   const status = c.req.query('status');
-  const adminId = c.req.query('adminId');
-  const walkerId = c.req.query('walkerId');
-  const suburb = c.req.query('suburb');
-  const postcode = c.req.query('postcode');
-
-  const where: string[] = [];
-  const params: unknown[] = [];
+  let statuses: string | undefined;
   if (status) {
-    const statuses = status.split(',').filter((s) => VALID_STATUSES.has(s));
-    if (statuses.length === 0) throw new HTTPException(400, { message: 'invalid status filter' });
-    where.push(`status IN (${statuses.map(() => '?').join(',')})`);
-    params.push(...statuses);
+    const valid = status.split(',').filter((s) => VALID_STATUSES.has(s));
+    if (valid.length === 0) throw new HTTPException(400, { message: 'invalid status filter' });
+    statuses = JSON.stringify(valid);
   }
-  if (adminId) {
-    // JSON array contains
-    where.push("EXISTS (SELECT 1 FROM json_each(admin_ids) WHERE value = ?)");
-    params.push(adminId);
-  }
-  if (walkerId) { where.push('assigned_walker_id = ?'); params.push(walkerId); }
-  if (suburb) { where.push('suburb = ?'); params.push(suburb); }
-  if (postcode) { where.push('postcode = ?'); params.push(postcode); }
-
-  const sql = `SELECT ${CAMPAIGN_COLUMNS} FROM campaigns${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT 500`;
-  const stmt = params.length ? c.env.DB.prepare(sql).bind(...params) : c.env.DB.prepare(sql);
-  const result = await stmt.all();
-  return c.json(result.results.map((r) => hydrate(r as Record<string, unknown>)));
+  const result = await rows(c, 'list_campaigns', {
+    statuses,
+    admin_id: c.req.query('adminId') || undefined,
+    walker_id: c.req.query('walkerId') || undefined,
+    suburb: c.req.query('suburb') || undefined,
+    postcode: c.req.query('postcode') || undefined,
+  });
+  return c.json(result.map(hydrate));
 });
 
 router.post('/campaigns', async (c) => {
-  const auth = await requireAuth(c);
   const body = await c.req.json<Record<string, unknown>>();
 
   if (typeof body.name !== 'string' || body.name.length === 0) {
@@ -70,118 +47,88 @@ router.post('/campaigns', async (c) => {
   if (!VALID_STATUSES.has(status)) throw new HTTPException(400, { message: 'invalid status' });
 
   // Creator is auto-added to admin_ids
+  const me = await whoami(c);
   const adminIds = Array.isArray(body.admin_ids) ? (body.admin_ids as string[]) : [];
-  if (!adminIds.includes(auth.id)) adminIds.push(auth.id);
+  if (!adminIds.includes(me.id)) adminIds.push(me.id);
 
   const id = newId();
-  const ts = now();
-
-  await c.env.DB.prepare(
-    `INSERT INTO campaigns (
-       id, name, name_key, street_name, suburb, postcode, state, country,
-       plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule,
-       user_payment, total_doors, budget, due_date, lat, lng, door_radius_m,
-       junk_mail_policy, property_filter, business_categories, active_printout_id, job_status,
-       created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      id, body.name, body.name_key ?? null, body.street_name ?? null,
-      body.suburb ?? null, body.postcode ?? null, body.state ?? null, body.country ?? null,
-      body.plan_type ?? null, status, toJson(adminIds), toJson(body.member_ids ?? []),
-      body.assigned_walker_id ?? null, toJson(body.schedule_rule ?? null),
-      toJson(body.user_payment ?? null), body.total_doors ?? null, body.budget ?? null,
-      body.due_date ?? null, body.lat ?? null, body.lng ?? null, body.door_radius_m ?? null,
-      body.junk_mail_policy ?? null, body.property_filter ?? null,
-      toJson(body.business_categories ?? []), body.active_printout_id ?? null,
-      body.job_status ?? null, ts, ts,
-    )
-    .run();
-
+  await run(c, 'create_campaign', {
+    id,
+    name: body.name,
+    name_key: body.name_key,
+    street_name: body.street_name,
+    suburb: body.suburb,
+    postcode: body.postcode,
+    state: body.state,
+    country: body.country,
+    plan_type: body.plan_type,
+    status,
+    admin_ids: toJson(adminIds),
+    member_ids: toJson(body.member_ids ?? []),
+    assigned_walker_id: body.assigned_walker_id,
+    schedule_rule: toJson(body.schedule_rule ?? null),
+    user_payment: toJson(body.user_payment ?? null),
+    total_doors: body.total_doors,
+    budget: body.budget,
+    due_date: body.due_date,
+    lat: body.lat,
+    lng: body.lng,
+    door_radius_m: body.door_radius_m,
+    junk_mail_policy: body.junk_mail_policy,
+    property_filter: body.property_filter,
+    business_categories: toJson(body.business_categories ?? []),
+    active_printout_id: body.active_printout_id,
+    job_status: body.job_status,
+  });
   return c.json({ id, admin_ids: adminIds }, 201);
 });
 
 router.get('/campaigns/:id', async (c) => {
-  await requireAuth(c);
-  const row = await c.env.DB.prepare(`SELECT ${CAMPAIGN_COLUMNS} FROM campaigns WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .first();
+  const row = await first(c, 'get_campaign', { id: c.req.param('id') });
   if (!row) throw new HTTPException(404, { message: 'campaign not found' });
   return c.json(hydrate(row));
 });
 
+const ALLOWED = [
+  'name', 'name_key', 'street_name', 'suburb', 'postcode', 'state', 'country',
+  'plan_type', 'status', 'admin_ids', 'member_ids', 'assigned_walker_id',
+  'schedule_rule', 'user_payment', 'total_doors', 'budget', 'due_date',
+  'completed_at', 'archived_at', 'lat', 'lng', 'door_radius_m',
+  'junk_mail_policy', 'property_filter', 'business_categories',
+  'active_printout_id', 'job_status',
+] as const;
+
 router.patch('/campaigns/:id', async (c) => {
   const campaignId = c.req.param('id');
-  await requireCampaignAdmin(c, campaignId);
-
-  const current = await c.env.DB.prepare('SELECT admin_ids, assigned_walker_id, name FROM campaigns WHERE id = ?')
-    .bind(campaignId)
-    .first<{ admin_ids: string; assigned_walker_id: string | null; name: string }>();
-  if (!current) throw new HTTPException(404, { message: 'campaign not found' });
+  const current = await requireCampaignAdmin(c, campaignId);
 
   const body = await c.req.json<Record<string, unknown>>();
-
-  const allowed = [
-    'name', 'name_key', 'street_name', 'suburb', 'postcode', 'state', 'country',
-    'plan_type', 'status', 'admin_ids', 'member_ids', 'assigned_walker_id',
-    'schedule_rule', 'user_payment', 'total_doors', 'budget', 'due_date',
-    'completed_at', 'archived_at', 'lat', 'lng', 'door_radius_m',
-    'junk_mail_policy', 'property_filter', 'business_categories',
-    'active_printout_id', 'job_status',
-  ] as const;
-
-  const updates: Record<string, unknown> = {};
-  for (const k of allowed) {
-    if (body[k] !== undefined) updates[k] = body[k];
-  }
+  const updates = pickDefined(body, ALLOWED);
 
   if (updates.status !== undefined && !VALID_STATUSES.has(updates.status as string)) {
     throw new HTTPException(400, { message: 'invalid status' });
   }
-
-  // JSON columns
-  if (updates.admin_ids !== undefined) {
-    if (!Array.isArray(updates.admin_ids)) throw new HTTPException(400, { message: 'admin_ids must be array' });
-    updates.admin_ids = toJson(updates.admin_ids);
+  if (updates.admin_ids !== undefined && !Array.isArray(updates.admin_ids)) {
+    throw new HTTPException(400, { message: 'admin_ids must be array' });
   }
-  if (updates.member_ids !== undefined) updates.member_ids = toJson(updates.member_ids);
-  if (updates.schedule_rule !== undefined) updates.schedule_rule = toJson(updates.schedule_rule);
-  if (updates.user_payment !== undefined) updates.user_payment = toJson(updates.user_payment);
-  if (updates.business_categories !== undefined) updates.business_categories = toJson(updates.business_categories);
-
   if (Object.keys(updates).length === 0) return c.json({ ok: true, changed: 0 });
-  updates.updated_at = now();
 
-  const cols = Object.keys(updates);
-  const setClause = cols.map((k) => `${k} = ?`).join(', ');
-  const values = cols.map((k) => updates[k] ?? null);
-  await c.env.DB.prepare(`UPDATE campaigns SET ${setClause} WHERE id = ?`).bind(...values, campaignId).run();
-
-  // Notification trigger: assigned_walker_id changed to a non-null new value.
+  const calls: { name: string; params: Params }[] = [
+    { name: 'update_campaign', params: { id: campaignId, patch: JSON.stringify(updates) } },
+  ];
+  // Notification trigger: assigned_walker_id changed to a non-null new value. Same transaction.
   const newWalkerId = body.assigned_walker_id as string | undefined;
   if (newWalkerId && newWalkerId !== current.assigned_walker_id) {
-    await c.env.DB.prepare(
-      `INSERT INTO notifications (id, user_id, type, title, body, campaign_id, read, created_at)
-       VALUES (?, ?, 'walker_assigned', ?, ?, ?, 0, ?)`,
-    )
-      .bind(
-        newId(),
-        newWalkerId,
-        "You've been assigned!",
-        `You're delivering for ${current.name}`,
-        campaignId,
-        now(),
-      )
-      .run();
+    calls.push({ name: 'notify_walker_assigned', params: { campaign_id: campaignId, walker_id: newWalkerId } });
   }
-
+  await batch(c, calls);
   return c.json({ ok: true });
 });
 
 router.delete('/campaigns/:id', async (c) => {
   const campaignId = c.req.param('id');
   await requireCampaignAdmin(c, campaignId);
-  await c.env.DB.prepare('DELETE FROM campaigns WHERE id = ?').bind(campaignId).run();
+  await run(c, 'delete_campaign', { id: campaignId });
   return c.json({ ok: true });
 });
 

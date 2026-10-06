@@ -46,14 +46,14 @@ test.describe.skip('Walker happy path (mocked)', () => {
     await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
     );
-    await page.route('**/pas-data-doordrop.serge-the-dev.workers.dev/v1/me', (route) =>
+    await page.route('**/.pas/worker/v1/me', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ user: fakeWalker, needsRoleSelection: false }),
       }),
     );
-    await page.route(/pas-data-doordrop.+\/v1\/campaigns(\?|$)/, (route) =>
+    await page.route(/\/\.pas\/worker\/v1\/campaigns(\?|$)/, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -1,24 +1,16 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Env } from '../env.js';
-import { requireAuth } from '../auth.js';
-import { newId, now } from '../lib.js';
+import { requireOwner } from '../auth.js';
+import { rows, run, type AppEnv } from '../pas.js';
+import { newId } from '../lib.js';
 
-const router = new Hono<{ Bindings: Env }>();
+const router = new Hono<AppEnv>();
 
 router.get('/walkers/:walkerId/reviews', async (c) => {
-  await requireAuth(c);
-  const result = await c.env.DB.prepare(
-    'SELECT * FROM walker_reviews WHERE walker_id = ? ORDER BY created_at DESC LIMIT 500',
-  )
-    .bind(c.req.param('walkerId'))
-    .all();
-  return c.json(result.results);
+  return c.json(await rows(c, 'list_walker_reviews', { walker_id: c.req.param('walkerId') }));
 });
 
 router.post('/walkers/:walkerId/reviews', async (c) => {
-  const auth = await requireAuth(c);
-  const walkerId = c.req.param('walkerId');
   const body = await c.req.json<{
     rating?: number; comment?: string; campaignId?: string; scheduleId?: string; reviewerName?: string;
   }>();
@@ -29,56 +21,38 @@ router.post('/walkers/:walkerId/reviews', async (c) => {
     throw new HTTPException(400, { message: 'comment too long (max 2000)' });
   }
   const id = newId();
-  const ts = now();
-  await c.env.DB.prepare(
-    `INSERT INTO walker_reviews (id, walker_id, reviewer_id, reviewer_name, campaign_id, schedule_id,
-                                 rating, comment, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(id, walkerId, auth.id, body.reviewerName ?? null,
-          body.campaignId ?? null, body.scheduleId ?? null,
-          body.rating, body.comment ?? null, ts, ts)
-    .run();
+  await run(c, 'create_review', {
+    id,
+    walker_id: c.req.param('walkerId'),
+    reviewer_name: body.reviewerName,
+    campaign_id: body.campaignId,
+    schedule_id: body.scheduleId,
+    rating: body.rating,
+    comment: body.comment,
+  });
   return c.json({ id }, 201);
 });
 
 router.patch('/reviews/:id', async (c) => {
-  const auth = await requireAuth(c);
   const id = c.req.param('id');
-  const row = await c.env.DB.prepare('SELECT reviewer_id FROM walker_reviews WHERE id = ?')
-    .bind(id)
-    .first<{ reviewer_id: string }>();
-  if (!row) throw new HTTPException(404, { message: 'review not found' });
-  if (row.reviewer_id !== auth.id) throw new HTTPException(403, { message: 'reviewer only' });
+  await requireOwner(c, 'review_owner', id, 'review not found', 'reviewer only');
 
   const body = await c.req.json<{ rating?: number; comment?: string }>();
-  const updates: Record<string, unknown> = {};
-  if (body.rating !== undefined) {
-    if (body.rating < 1 || body.rating > 5) throw new HTTPException(400, { message: 'rating 1-5' });
-    updates.rating = body.rating;
+  if (body.rating !== undefined && (body.rating < 1 || body.rating > 5)) {
+    throw new HTTPException(400, { message: 'rating 1-5' });
   }
-  if (body.comment !== undefined) {
-    if (body.comment.length > 2000) throw new HTTPException(400, { message: 'comment too long' });
-    updates.comment = body.comment;
+  if (body.comment !== undefined && body.comment.length > 2000) {
+    throw new HTTPException(400, { message: 'comment too long' });
   }
-  if (Object.keys(updates).length === 0) return c.json({ ok: true, changed: 0 });
-  updates.updated_at = now();
-  const cols = Object.keys(updates);
-  await c.env.DB.prepare(
-    `UPDATE walker_reviews SET ${cols.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`,
-  ).bind(...cols.map((k) => updates[k] ?? null), id).run();
+  if (body.rating === undefined && body.comment === undefined) return c.json({ ok: true, changed: 0 });
+  await run(c, 'update_my_review', { id, rating: body.rating, comment: body.comment });
   return c.json({ ok: true });
 });
 
 router.delete('/reviews/:id', async (c) => {
-  const auth = await requireAuth(c);
   const id = c.req.param('id');
-  const row = await c.env.DB.prepare('SELECT reviewer_id FROM walker_reviews WHERE id = ?')
-    .bind(id)
-    .first<{ reviewer_id: string }>();
-  if (!row) throw new HTTPException(404, { message: 'review not found' });
-  if (row.reviewer_id !== auth.id) throw new HTTPException(403, { message: 'reviewer only' });
-  await c.env.DB.prepare('DELETE FROM walker_reviews WHERE id = ?').bind(id).run();
+  await requireOwner(c, 'review_owner', id, 'review not found', 'reviewer only');
+  await run(c, 'delete_my_review', { id });
   return c.json({ ok: true });
 });
 

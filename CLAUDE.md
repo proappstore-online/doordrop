@@ -13,32 +13,32 @@ Each role has a separate route subtree (`/app`, `/walker`, `/admin`) gated by `P
 ## Architecture
 
 ```
-   ┌─────────────────────┐                   ┌─────────────────────┐
-   │ web/  (React app)   │  Bearer (FAS JWT) │  worker/            │
-   │ - useProGate auth   │ ────────────────▶ │  - Hono + /v1/*     │
-   │ - 14 repositories   │                   │  - 19 D1 tables     │
-   │ - useDeliveryTrack  │                   │  - authz from        │
-   │ - Leaflet maps      │                   │    firestore.rules   │
-   └─────────────────────┘                   └──────────┬──────────┘
-            ▲                                            │
-            │ initPro({...}) via @proappstore/sdk        │ D1 binding
-            │ - pas.auth (GitHub OAuth via FAS)          │
-            │ - pas.storage (R2 uploads/uploadPublic)    ▼
-            │ - pas.usage (auto-heartbeat)         ┌─────────────────┐
-            │                                     │ pas-data-doordrop│
-            ▼                                     │   D1 database    │
-   ┌──────────────────────────┐                  └─────────────────┘
-   │ Cloudflare Pages         │
-   │ proappstore-doordrop     │
-   │ .pages.dev               │
+   ┌─────────────────────┐  same-origin       ┌──────────────────────────┐
+   │ web/  (React app)   │  /.pas/worker/v1/* │  worker/  (app worker)   │
+   │ - useProGate auth   │ ─────────────────▶ │  - Hono + /v1/* routes   │
+   │ - 14 repositories   │  session cookie    │  - cross-row checks      │
+   │ - useDeliveryTrack  │                    │  - no DB binding         │
+   │ - Leaflet maps      │                    └────────────┬─────────────┘
+   └─────────────────────┘                                 │ pas.actions.call(...)
+            ▲                                              │ run AS the signed-in user
+            │ initPro({...}) via @proappstore/sdk          ▼
+            │ - pas.auth (platform-cookie)        ┌──────────────────────────┐
+            │ - pas.storage (R2 uploads)          │ mcp.json actions         │
+            │                                     │ (SQL + :__user_id authz) │
+   ┌──────────────────────────┐                   │  → pas-data-doordrop D1  │
+   │ R2 (pas-apps/apps/doordrop)│                 └──────────────────────────┘
    └──────────────────────────┘
 ```
 
-### Why we override the platform Data Worker
+### App worker, not a Data Worker override (platform#264)
 
-`pas create` deploys a generic SQL gateway (`/query`, `/execute`, `/migrate`) as `pas-data-<appId>`. That's wrong-by-default for any app with non-trivial authz, because all rules would have to be client-side. DoorDrop's authz (campaign-admin vs assigned-walker × per-field allow-lists) needs server enforcement, so we **redeploy our own Worker with the same name** — same URL contract, our handlers. The `worker/` package has the source.
+DoorDrop's authz (campaign-admin vs assigned-walker × per-field allow-lists) needs server enforcement. It used to get it by redeploying its own Worker under the platform's `pas-data-doordrop` script name; every fleet redeploy and session-key drift repair put the generic worker back, and the API 404'd from 2026-07-22. Now:
 
-**Gotcha**: running `pas publish` redeploys the platform's generic Worker over ours. After any `pas publish`, re-run `cd worker && pnpm run deploy`. Long-term fix in `pas/platform/` is in the port-plan §17.
+- `worker/` is a platform **app worker** (`defineAppWorker({ fetch })`, ADR-009). The browser calls `/.pas/worker/v1/*` on the app origin; the platform authenticates the session cookie, mints a caller grant and invokes the worker. The worker has **no** D1 binding, no signing key and no Cloudflare credential.
+- Every read and write is a **registered action** in `mcp.json`, run as the caller (`:__user_id`). Rules SQL can express — campaign admin, assigned walker, app admin (`users.role = 'admin'`), owner-only rows, the walker's door-field allow-list, `delivered_by` = self, `access_user_ids` never shrinks, `payment_mode` set-once — are in the action SQL, because **a signed-in user can call any of these actions directly**, bypassing the worker. The worker keeps the request validation and the 400/403/404/409 answers.
+- Actions marked `auth.caller_unscoped` are the reads the old worker left open to any signed-in user (users, campaigns, doors, printouts, interests, reviews, history, config). Kept as-is by the faithful port; tightening them is separate work.
+- `pas-data-doordrop` is the platform's generic data worker **by design** now; fleet redeploys don't touch the app worker.
+- Not live until the platform enables app workers for doordrop (blocked on platform#274 and the deploy step in platform#305).
 
 ### Wire format ↔ domain models
 
@@ -61,7 +61,7 @@ Replacing with `fas.rooms` (WebSocket Durable Objects) is task #10/#11 in the po
 ### Auth & identity
 
 - Sign-in: `useProGate` → `pas.auth.signIn()` → redirect to FAS hosted OAuth start → GitHub → callback hash → SDK persists to localStorage.
-- The Worker's `requireAuth` validates Bearer tokens via `api.freeappstore.online/v1/auth/me` (60s in-memory cache).
+- The worker never sees a token: the platform verifies the session cookie on `/.pas/worker/*` and the worker's actions run as that user. `worker/src/auth.ts` only resolves the caller's standing (`whoami`, `campaign_access`).
 - `currentUser` from `useAuthContext()` is the FAS `User` shape: `{ id, login, avatarUrl, dateOfBirth }`. **Not** `{ uid, email, displayName }` — Firebase Auth's shape is gone.
 - The full `userData` (email, name, role, profile, etc.) lives in our D1 `users` table, fetched via `/v1/me`. Use `useUserData()` for it.
 - First-time sign-in returns `{ needsRoleSelection: true }` from `/v1/me`. The router redirects to `/select-role` which lets the user pick `client` or `walker`. `admin` is granted only via `/v1/admin/users/:id/role` (admin-only).
@@ -79,7 +79,7 @@ web/                                React app (this is what runs in the browser)
 │   ├── main.tsx                     awaits pas.auth.init() before render
 │   ├── services/pas.ts              singleton ProAppStore SDK instance
 │   ├── lib/
-│   │   ├── api.ts                   fetch wrapper with Bearer auth + ApiError
+│   │   ├── api.ts                   fetch wrapper (pas.auth.authenticatedFetch) + ApiError
 │   │   └── transform.ts             fromWire / toWire (snake↔camel, ms↔Date)
 │   ├── repositories/                14 ported repos, same surface as original
 │   ├── hooks/                       useAuthContext, useUserData, useDeliveryTracking, ...
@@ -91,41 +91,41 @@ web/                                React app (this is what runs in the browser)
 ├── playwright.config.ts
 └── package.json
 
-worker/                              Custom Data Worker (overrides pas-data-doordrop)
+worker/                              App worker (ADR-009), built to dist/app.js
 ├── src/
-│   ├── index.ts                     Hono app, mounts /v1/* routers + admin-gated SQL ops
-│   ├── auth.ts                      requireAuth / requireAdmin / requireCampaignAdmin / requireAssignedWalker
-│   ├── env.ts                       Env interface (DB, APP_ID, FAS_API_BASE)
-│   ├── lib.ts                       toJson, fromJson, newId, propertyId helpers
+│   ├── index.ts                     defineAppWorker({ fetch }) → the Hono app
+│   ├── app.ts                       mounts /v1/* routers + /v1/me
+│   ├── pas.ts                       rows / first / run / batch over pas.actions
+│   ├── auth.ts                      whoami / requireAdmin / requireCampaignAdmin / requireAssignedWalker / requireOwner
+│   ├── lib.ts                       toJson, fromJson, newId, propertyId, pickDefined
 │   └── routes/                      13 resource routers
-└── wrangler.toml                    binding to pas-data-doordrop D1
+└── test/                            vitest: mcp.json lint + authz, run against SQLite built from migrations/
 
+mcp.json                             the registered actions (registered on every deploy)
 migrations/
-└── 0001_init.sql                    19-table schema
+└── 0001_init.sql                    18-table schema
 
 .pas.json                            { appId, dataApiBase, d1DatabaseId }
 ```
 
 ## How to add a feature
 
-1. **Storage**: if a new column or table — add to a new `migrations/000N_*.sql`, apply via the Worker's `POST /migrate` (admin-gated).
-2. **Worker endpoint**: add a route in `worker/src/routes/<resource>.ts`. Always gate with one of `requireAuth | requireAdmin | requireCampaignAdmin | requireAssignedWalker`. For PATCH, use an explicit allow-list of fields to mirror the `firestore.rules` pattern. Mount it in `worker/src/index.ts` via `app.route('/v1', <router>)`.
-3. **Repository**: add or extend in `web/src/repositories/`. Run requests through `lib/api.ts`'s `apiGet/apiPost/apiPatch/apiPut/apiDelete`. Use `toWire(data)` on writes and `fromWire(response)` on reads — never expose snake_case to the page layer.
-4. **Hook / page**: import the repo, treat the returned shape as the canonical model. If you need real-time, follow the existing polling pattern with a `TODO(task #10)` comment so it's findable when we migrate to `fas.rooms`.
-5. **Route**: add to `web/src/App.tsx` under the correct `PrivateRoute allowedRoles={[...]}`. Admins implicitly pass every role check; that's intentional.
+1. **Storage**: if a new column or table — add a new `migrations/000N_*.sql`. The worker can no longer run DDL; until the app moves to the platform's `migrations.json` deploy step, apply it through the platform data worker's role-gated `/migrate`.
+2. **Action**: add it to `mcp.json`. Scope every statement with `:__user_id` (or declare `auth.caller_unscoped` with a reason) and put the authz in the SQL — users can call actions directly. Partial updates take a `patch` JSON param (`CASE WHEN json_type(:patch, '$.col') IS NULL THEN col ELSE json_extract(:patch, '$.col') END`).
+3. **Worker endpoint**: add a route in `worker/src/routes/<resource>.ts` that validates the request, resolves 404 vs 403 with `auth.ts`, and calls the action. Mount it in `worker/src/app.ts`. Add the access cases to `worker/test/authz.test.ts`, both through the worker and straight at the action.
+4. **Repository**: add or extend in `web/src/repositories/`. Run requests through `lib/api.ts`'s `apiGet/apiPost/apiPatch/apiPut/apiDelete`. Use `toWire(data)` on writes and `fromWire(response)` on reads — never expose snake_case to the page layer.
+5. **Hook / page**: import the repo, treat the returned shape as the canonical model. If you need real-time, follow the existing polling pattern with a `TODO(task #10)` comment so it's findable when we migrate to `fas.rooms`.
+6. **Route**: add to `web/src/App.tsx` under the correct `PrivateRoute allowedRoles={[...]}`. Admins implicitly pass every role check; that's intentional.
 
 ## How to deploy
 
-1. Build: `pnpm --filter @doordrop/web build`
-2. Deploy app: `cd web && wrangler pages deploy dist --project-name=proappstore-doordrop --branch=main`
-3. If Worker changed: `cd worker && pnpm run deploy` (deploys to `pas-data-doordrop` Worker)
-4. Commit + push to `main` on `proappstore-online/doordrop`
+Push to `main`. `.github/workflows/deploy.yml` is the platform's canonical workflow (keep it byte-identical to `packages/admin/src/__fixtures__/canonical-deploy.yml` in `proappstore-online/platform`): it builds `web/`, registers `mcp.json`, and uploads to R2 with keyless GitHub OIDC credentials. No repo secrets, no wrangler.
 
-No CI yet — direct deploy from local. Eventually move to GitHub Actions per the workspace-wide CI memory.
+The app worker is built (`pnpm --filter @doordrop/worker build`) but **not deployed yet**: the canonical workflow's worker step is platform#305, and app workers are enabled per app by a platform admin.
 
 ## Gotchas
 
-- **Don't run `pas publish` casually**: it redeploys the platform's generic Worker over our custom one and has a known server-side crash on the hosting-route step. Re-run `worker:deploy` after.
+- **`pas-data-doordrop` is the platform's generic data worker** — that is correct. Don't deploy anything under that name.
 - **`currentUser.uid/.email/.displayName` don't exist** — FAS User is `{ id, login, avatarUrl, dateOfBirth }`. There's a sed history of fixing these; if you see one, it's the bug.
 - **Bundle size is 851 KiB precache** (single chunk). Code-splitting the Campaign components would cut the initial download substantially. Hasn't mattered yet.
 - **The 7 stubbed pages render "Coming soon"** — `DoorDetailPage`, `MessagesPage`, `ShareHirePage`, `UserProfileEditPage`, `WalkerDashboardPage`, `WalkerDeliverRedirect`, `WalkerHistoryPage`. Their imports + repository surfaces are wired so each one is a self-contained porting unit.

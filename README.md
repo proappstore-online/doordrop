@@ -7,7 +7,7 @@ Ported from the original Firebase-based DoorDrop ([`DoorDrop/platform`](https://
 ## URLs
 
 - **Production**: <https://proappstore-doordrop.pages.dev>
-- **Data Worker (API)**: <https://pas-data-doordrop.serge-the-dev.workers.dev>
+- **API**: `https://doordrop.proappstore.online/.pas/worker/v1/*` (app worker; not enabled yet — platform#264)
 - **GitHub**: <https://github.com/proappstore-online/doordrop>
 - _Custom domain `doordrop.proappstore.online` pending a platform fix in `fas/admin` — see port plan §17._
 
@@ -15,37 +15,32 @@ Ported from the original Firebase-based DoorDrop ([`DoorDrop/platform`](https://
 
 - **Walker happy path** — sign in (GitHub OAuth via `@proappstore/sdk`) → role pick → `/walker` (browse open campaigns) → click campaign → details → "Start Delivery" → live GPS tracking with auto-delivery when within radius and at walking pace.
 - **Client happy path** — sign in → role pick → `/app` (dashboard) → `/app/setup` (create) → `/app/campaign/:id` (manage doors, publish, approve walker interest, watch live track, complete, review).
-- **API** — 38 hand-rolled `/v1/*` endpoints in the custom Worker with authz allow-lists derived from the original `firestore.rules` (campaign-admin, assigned-walker, owner-only, admin-only).
+- **API** — `/v1/*` endpoints in the app worker (`worker/`), each backed by registered actions in `mcp.json` that carry the authz derived from the original `firestore.rules` (campaign-admin, assigned-walker, owner-only, admin-only).
 
 ## Stack
 
 | Layer | What |
 |---|---|
 | Hosting | Cloudflare Pages |
-| Database | Cloudflare D1 (`pas-data-doordrop`) — 19 tables |
-| API | Custom Cloudflare Worker (`pas-data-doordrop.serge-the-dev.workers.dev`), Hono + per-resource handlers |
-| Auth | `@proappstore/sdk` → FAS GitHub OAuth, session-token Bearer auth into the Worker |
+| Database | Cloudflare D1 (`pas-data-doordrop`) — 18 tables, reached only through `mcp.json` actions |
+| API | PAS app worker (`worker/`, `defineAppWorker`), Hono + per-resource handlers, served at `/.pas/worker/*` |
+| Auth | `@proappstore/sdk` platform-cookie session; the platform runs the worker's actions as the signed-in user |
 | Storage | R2 via `pas.storage.uploadPublic()` for flyers/photos |
 | Frontend | React 19 + Vite + Tailwind v4 + react-router-dom v6 |
 | Maps | Leaflet + react-leaflet + react-leaflet-cluster (browser-native Geolocation API for GPS) |
-| Tests | Playwright (E2E), `tests/e2e/` |
+| Tests | Vitest authz + manifest tests (`worker/test/`), Playwright (E2E), `web/tests/e2e/` |
 
 ## Develop
 
 ```bash
 pnpm install
 pnpm --filter @doordrop/web dev          # React app on :5173
-pnpm --filter @doordrop/worker dev       # Worker on :8787 (optional; prod Worker also reachable)
+pnpm --filter @doordrop/worker test      # worker authz + mcp.json tests
 ```
 
 ## Build & deploy
 
-```bash
-pnpm --filter @doordrop/web build
-cd web && wrangler pages deploy dist --project-name=proappstore-doordrop --branch=main
-```
-
-The Worker is independently deployed with `pnpm --filter @doordrop/worker run deploy` — note that running `pas publish` re-deploys the platform's generic Data Worker on top of ours, so re-run the worker deploy after any `pas publish`. (Tracked in [`doordrop-port-plan.md`](../doordrop-port-plan.md) §17 follow-ups.)
+Push to `main`: the platform's canonical `deploy.yml` builds `web/`, registers `mcp.json` and uploads to R2 with keyless OIDC credentials. The worker builds with `pnpm --filter @doordrop/worker build`; the platform deploys it once app workers are enabled for doordrop (platform#264, #305).
 
 ## Test
 

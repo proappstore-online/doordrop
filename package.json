@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @doordrop/web dev",
     "build": "pnpm --filter @doordrop/web build",
     "preview": "pnpm --filter @doordrop/web preview",
-    "typecheck": "pnpm --filter @doordrop/web exec tsc -b",
-    "test": "pnpm --filter @doordrop/web exec tsc -b"
+    "typecheck": "pnpm --filter @doordrop/web exec tsc -b && pnpm --filter @doordrop/worker typecheck",
+    "test": "pnpm --filter @doordrop/web exec tsc -b && pnpm --filter @doordrop/worker test"
   }
 }

@@ -12,10 +12,6 @@ export function fromJson<T>(s: string | null | undefined, fallback: T): T {
   }
 }
 
-export function now(): number {
-  return Date.now();
-}
-
 export function newId(): string {
   return crypto.randomUUID();
 }
@@ -24,11 +20,9 @@ export function propertyId(address: string, suburb: string, postcode: string): s
   return `${address}|${suburb}|${postcode}`.toLowerCase().replace(/[/\\.\s]+/g, '_');
 }
 
-// Pull a subset of allowed fields from a request body. Anything else is dropped.
-export function pick<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Partial<Pick<T, K>> {
-  const out: Partial<Pick<T, K>> = {};
-  for (const k of keys) {
-    if (k in obj && obj[k] !== undefined) out[k] = obj[k];
-  }
+/** The allowed keys of a request body that are present (null included). */
+export function pickDefined(body: Record<string, unknown>, allowed: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of allowed) if (body[k] !== undefined) out[k] = body[k];
   return out;
 }
