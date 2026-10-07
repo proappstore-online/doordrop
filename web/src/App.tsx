@@ -24,6 +24,17 @@ import WalkerDashboardPage from './pages/walker/WalkerDashboardPage';
 import WalkerHistoryPage from './pages/walker/WalkerHistoryPage';
 import WalkerSetupPage from './pages/walker/WalkerSetupPage';
 import DoorDetailPage from './pages/Campaign/DoorDetailPage';
+import WalkerPublicProfile from './pages/walker/WalkerPublicProfile';
+
+// Shared pages
+import HelpPage from './pages/Help/HelpPage';
+import MessagesPage from './pages/Messages/MessagesPage';
+import UserProfilePage from './pages/UserProfile/UserProfilePage';
+import UserProfileEditPage from './pages/UserProfile/UserProfileEditPage';
+import AccountSettingsPage from './pages/UserProfile/AccountSettingsPage';
+import UserPreferencesPage from './pages/UserProfile/UserPreferencesPage';
+import WalkersPage from './pages/UserInfoPage/WalkersPage';
+import ShareHirePage from './pages/UserInfoPage/ShareHirePage';
 
 const router = createBrowserRouter([
   { path: '/', element: <LoginPage />, errorElement: <ErrorPage /> },
@@ -48,6 +59,14 @@ const router = createBrowserRouter([
           { path: '/app/flyers', element: <FlyersPage /> },
           { path: '/app/properties', element: <PropertiesPage /> },
           { path: '/app/properties/:propertyId', element: <PropertyDetailPage /> },
+          { path: '/app/user/:userId', element: <UserProfilePage /> },
+          { path: '/app/user/:userId/edit', element: <UserProfileEditPage /> },
+          { path: '/app/account', element: <AccountSettingsPage /> },
+          { path: '/app/preferences', element: <UserPreferencesPage /> },
+          { path: '/app/messages', element: <MessagesPage /> },
+          { path: '/app/messages/:campaignId', element: <MessagesPage /> },
+          { path: '/app/walkers', element: <WalkersPage /> },
+          { path: '/app/sharehire', element: <ShareHirePage /> },
         ],
       },
     ],
@@ -67,6 +86,12 @@ const router = createBrowserRouter([
           { path: '/walker/campaign/:campaignId', element: <WalkerCampaignDetailPage /> },
           { path: '/walker/campaign/:campaignId/deliver', element: <WalkerDeliveryPage /> },
           { path: '/walker/campaign/:campaignId/door/:doorId', element: <DoorDetailPage /> },
+          { path: '/walker/user/:userId', element: <UserProfilePage /> },
+          { path: '/walker/user/:userId/edit', element: <UserProfileEditPage /> },
+          { path: '/walker/account', element: <AccountSettingsPage /> },
+          { path: '/walker/preferences', element: <UserPreferencesPage /> },
+          { path: '/walker/messages', element: <MessagesPage /> },
+          { path: '/walker/messages/:campaignId', element: <MessagesPage /> },
         ],
       },
     ],
@@ -82,6 +107,16 @@ const router = createBrowserRouter([
       },
     ],
   },
+  {
+    element: <PrivateRoute />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [{ path: '/walker/:walkerId', element: <WalkerPublicProfile /> }],
+      },
+    ],
+  },
+  { path: '/help', element: <HelpPage /> },
   { path: '*', element: <ErrorPage /> },
 ]);
 

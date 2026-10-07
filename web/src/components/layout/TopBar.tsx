@@ -4,8 +4,7 @@ import { useAuth } from "../../hooks/useAuthContext";
 import { useThemeMode } from "../../ThemeModeProvider";
 import { useUserData } from "../../hooks/useUserData";
 import { APP_TITLE } from "../../config";
-import logoDark from "../../assets/logo.svg";
-import logoLight from "../../assets/logo.svg";
+import logo from "../../assets/logo.svg";
 import MobileDrawer from "./MobileDrawer";
 import ProfileMenu from "./ProfileMenu";
 import NotificationBell from "./NotificationBell";
@@ -78,7 +77,7 @@ const TopBar: React.FC = () => {
 
             {/* Logo */}
             <img
-              src={mode === "dark" ? logoDark : logoLight}
+              src={logo}
               alt="Logo"
               className="w-10 h-10 rounded-full"
             />

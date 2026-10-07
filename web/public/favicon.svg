@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#2D7D7D"/>
+  <!-- Door shape -->
+  <rect x="176" y="120" width="160" height="260" rx="8" fill="#ffffff"/>
+  <!-- Door panel top -->
+  <rect x="196" y="140" width="120" height="90" rx="4" fill="#e0f2f1"/>
+  <!-- Door panel bottom -->
+  <rect x="196" y="250" width="120" height="90" rx="4" fill="#e0f2f1"/>
+  <!-- Door handle -->
+  <circle cx="296" cy="260" r="10" fill="#2D7D7D"/>
+  <!-- Drop/arrow pointing down (delivery) -->
+  <path d="M256 390 L230 410 L244 410 L244 430 L268 430 L268 410 L282 410 Z" fill="#ffffff"/>
+</svg>
