@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { pushWalkerInterested } from "../../services/pushNotifications";
 import { Link } from "react-router-dom";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { CampaignRepository } from "../../repositories/campaignRepository";
@@ -65,6 +66,8 @@ const WalkerCampaignsPage: React.FC = () => {
         createdAt: new Date(),
       });
       setInterestedGroupIds((prev) => new Set([...prev, groupId]));
+      const group = groups.find((g) => g.id === groupId);
+      if (group) void pushWalkerInterested(group, currentUser.id, currentUser.login || "A walker");
     } catch (error) {
       console.error("Failed to express interest:", error);
     } finally {

@@ -10,7 +10,6 @@ import MobileDrawer from "./MobileDrawer";
 import ProfileMenu from "./ProfileMenu";
 import NotificationBell from "./NotificationBell";
 import MessagesBadge from "./MessagesBadge";
-import { requestPushPermission } from "../../services/pushNotifications";
 
 const TopBar: React.FC = () => {
   const { userData } = useUserData();
@@ -27,12 +26,6 @@ const TopBar: React.FC = () => {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      requestPushPermission(currentUser.id);
-    }
-  }, [currentUser]);
 
   const currentPath = location.pathname;
   const isWalkerPath = currentPath.startsWith("/walker");

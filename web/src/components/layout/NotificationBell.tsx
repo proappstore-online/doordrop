@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useUserData } from "../../hooks/useUserData";
+import { isSupported, isPushEnabled, enablePush, disablePush } from "../../services/pushNotifications";
 
 const timeAgo = (date: Date): string => {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -20,6 +21,20 @@ const NotificationBell: React.FC = () => {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [pushOn, setPushOn] = useState(false);
+
+  useEffect(() => {
+    isPushEnabled().then(setPushOn).catch(() => setPushOn(false));
+  }, []);
+
+  const togglePush = async () => {
+    if (pushOn) {
+      await disablePush();
+      setPushOn(false);
+    } else {
+      setPushOn(await enablePush());
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -75,6 +90,14 @@ const NotificationBell: React.FC = () => {
               </button>
             )}
           </div>
+
+          {isSupported() && (
+            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-right">
+              <button onClick={togglePush} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
+                {pushOn ? "Turn off push notifications" : "Turn on push notifications"}
+              </button>
+            </div>
+          )}
 
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (

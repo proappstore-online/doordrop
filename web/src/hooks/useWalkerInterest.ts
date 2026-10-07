@@ -4,6 +4,7 @@ import { CampaignRepository } from "../repositories/campaignRepository";
 import type { UserData } from "../models/user";
 import type { WalkerInterest } from "../models/walkerInterest";
 import type { CampaignData } from "../models/campaign";
+import { pushWalkerAssigned } from "../services/pushNotifications";
 
 export interface UsedWalkerInterestReturn {
   // State
@@ -59,6 +60,7 @@ export function useWalkerInterest(
         jobStatus: "assigned",
       });
       setCampaign((prev) => prev ? { ...prev, assignedWalkerId: walkerId, jobStatus: "assigned" } : prev);
+      void pushWalkerAssigned(campaignId, walkerId);
     } catch (err) {
       console.error("Failed to assign walker:", err);
     } finally {

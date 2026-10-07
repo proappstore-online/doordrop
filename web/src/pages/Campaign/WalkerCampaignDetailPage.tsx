@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { pushWalkerInterested } from "../../services/pushNotifications";
 import { useParams, Link } from "react-router-dom";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { DoorRepository } from "../../repositories/doorRepository";
@@ -114,6 +115,7 @@ const WalkerCampaignDetailPage: React.FC = () => {
         createdAt: new Date(),
       });
       setIsInterested(true);
+      if (campaign) void pushWalkerInterested(campaign, currentUser.id, currentUser.login || "A walker");
     } catch (err) {
       console.error("Failed to express interest:", err);
     } finally {
