@@ -459,11 +459,11 @@ const WalkerSetupPage: React.FC = () => {
             />
             <span>
               I agree to the{" "}
-              <a href="/terms" className="text-emerald-600 hover:underline" target="_blank">
+              <a href="/terms.html" className="text-emerald-600 hover:underline" target="_blank">
                 Terms and Conditions
               </a>{" "}
               and{" "}
-              <a href="/privacy" className="text-emerald-600 hover:underline" target="_blank">
+              <a href="/privacy.html" className="text-emerald-600 hover:underline" target="_blank">
                 Privacy Policy
               </a>
               . <span className="text-red-500">*</span>

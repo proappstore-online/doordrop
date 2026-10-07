@@ -81,10 +81,12 @@ web/                                React app (this is what runs in the browser)
 │   ├── lib/
 │   │   ├── api.ts                   fetch wrapper (pas.auth.authenticatedFetch) + ApiError
 │   │   └── transform.ts             fromWire / toWire (snake↔camel, ms↔Date)
-│   ├── repositories/                14 ported repos, same surface as original
+│   ├── repositories/                ported repos (incl. admin, booking, deliveryRun), same surface as original
 │   ├── hooks/                       useAuthContext, useUserData, useDeliveryTracking, ...
-│   ├── components/                  35 components (Leaflet maps, modals, panels)
+│   ├── services/pushNotifications   web push enable/disable (service worker: public/push-sw.js)
+│   ├── components/                  Leaflet maps, modals, panels, layout (TopBar, NotificationBell)
 │   ├── pages/                       page tree (auth, Campaign, client, walker, admin, ...)
+│   │   └── admin/                   /admin/* (layout, dashboard, users, campaigns, addresses)
 │   ├── models/                      13 domain types (canonical camelCase)
 │   └── routes/PrivateRoute.tsx      role-gated route guard
 ├── tests/e2e/                       Playwright specs
@@ -98,12 +100,13 @@ worker/                              App worker (ADR-009), built to dist/app.js
 │   ├── pas.ts                       rows / first / run / batch over pas.actions
 │   ├── auth.ts                      whoami / requireAdmin / requireCampaignAdmin / requireAssignedWalker / requireOwner
 │   ├── lib.ts                       toJson, fromJson, newId, propertyId, pickDefined
-│   └── routes/                      13 resource routers
+│   └── routes/                      resource routers (incl. admin, bookings, deliveryRuns)
 └── test/                            vitest: mcp.json lint + authz, run against SQLite built from migrations/
 
 mcp.json                             the registered actions (registered on every deploy)
 migrations/
-└── 0001_init.sql                    18-table schema
+├── 0001_init.sql                    18-table schema
+└── 0002_bookings.sql                bookings table
 
 .pas.json                            { appId, dataApiBase, d1DatabaseId }
 ```
@@ -127,9 +130,11 @@ The app worker is built (`pnpm --filter @doordrop/worker build`) but **not deplo
 
 - **`pas-data-doordrop` is the platform's generic data worker** — that is correct. Don't deploy anything under that name.
 - **`currentUser.uid/.email/.displayName` don't exist** — FAS User is `{ id, login, avatarUrl, dateOfBirth }`. There's a sed history of fixing these; if you see one, it's the bug.
-- **Bundle size is 851 KiB precache** (single chunk). Code-splitting the Campaign components would cut the initial download substantially. Hasn't mattered yet.
-- **The 7 stubbed pages render "Coming soon"** — `DoorDetailPage`, `MessagesPage`, `ShareHirePage`, `UserProfileEditPage`, `WalkerDashboardPage`, `WalkerDeliverRedirect`, `WalkerHistoryPage`. Their imports + repository surfaces are wired so each one is a self-contained porting unit.
-- **Stubs that no-op or throw**: `DeliveryRunRepository.*` (worker endpoints not built yet — surface the call sites if you need them), `WalkerInterestRepository.castVote/hasUserVoted/getVoteCount` (votes feature dropped, methods are no-ops so the UI doesn't crash).
+- **Bundle size is ~1048 KiB precache** (single chunk). Code-splitting the Campaign components would cut the initial download substantially. Hasn't mattered yet.
+- **No stubbed pages remain.** All former "Coming soon" pages, `DeliveryRunRepository` and the admin pages (`/admin/*`, linked from the top bar for admins) are ported.
+- **Remaining stub**: `WalkerInterestRepository.castVote/hasUserVoted/getVoteCount` (votes feature dropped, methods are no-ops so the UI doesn't crash).
+- **Admin lists are capped at 500 rows** (`LIMIT 500` in the `mcp.json` users/campaigns actions, no pagination). `ListCapNotice` in `web/src/pages/admin/adminUi.tsx` warns when the cap is hit.
+- **Terms / privacy** are static pages, `web/public/terms.html` and `privacy.html` (ported from the original website; styles/assets in `web/public/site/`). Link to them as `/terms.html` and `/privacy.html`. `web/public/privacy.md` is the platform-template copy, not linked.
 - **Date round-trip**: dates go out as `Date.getTime()` (epoch ms int) and come back as Date via `fromWire`. Don't bypass `toWire`/`fromWire` or you'll round-trip strings.
 - **Permissions-Policy in `web/public/_headers`** allows `geolocation=(self)` and `camera=(self)` — required for the GPS hook and photo uploads. Don't tighten without checking that flow first.
 

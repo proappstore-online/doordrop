@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import type { UserWithId } from '../../models';
 import { AdminRepository } from '../../repositories/adminRepository';
-import { RoleBadge, Spinner } from './adminUi';
+import { ListCapNotice, RoleBadge, Spinner } from './adminUi';
 
 type Role = UserWithId['role'];
 type Filter = 'all' | Role;
@@ -63,6 +63,7 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      <ListCapNotice count={users.length} noun="users" />
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">

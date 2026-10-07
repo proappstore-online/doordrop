@@ -50,7 +50,7 @@ const TopBar: React.FC = () => {
     return [];
   };
 
-  const navLinks = getNavLinks();
+  const navLinks = userRole === "admin" ? [...getNavLinks(), { label: "Admin", to: "/admin" }] : getNavLinks();
   const bgColor = mode === "dark" ? "#4A9B7D" : "#2D7D7D";
 
   return (

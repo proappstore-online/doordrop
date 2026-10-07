@@ -1,5 +1,17 @@
 import { NavLink } from 'react-router-dom';
 
+/** The admin list actions in mcp.json are capped at 500 rows. */
+export const ADMIN_LIST_CAP = 500;
+
+export function ListCapNotice({ count, noun }: { count: number; noun: string }) {
+  if (count < ADMIN_LIST_CAP) return null;
+  return (
+    <p className="mb-4 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+      Showing the first {ADMIN_LIST_CAP} {noun}; any beyond that are not listed.
+    </p>
+  );
+}
+
 export function Spinner() {
   return (
     <div className="flex justify-center py-12">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CampaignRepository } from '../../repositories/campaignRepository';
-import { Spinner } from './adminUi';
+import { ListCapNotice, Spinner } from './adminUi';
 
 type CampaignRow = Awaited<ReturnType<typeof CampaignRepository.getAllGroups>>[number];
 
@@ -21,6 +21,7 @@ export default function AdminCampaignsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-6">Campaigns ({campaigns.length})</h1>
+      <ListCapNotice count={campaigns.length} noun="campaigns" />
       <div className="grid gap-4">
         {campaigns.map((c) => (
           <Link

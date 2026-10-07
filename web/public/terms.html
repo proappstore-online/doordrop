@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoorDrop - Terms of Use</title>
+  <link rel="icon" href="/site/assets/favicon.svg" type="image/svg+xml" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            "dd-primary": "#10B981",
+            "dd-secondary": "#3B82F6",
+            "dd-dark": "#0F172A",
+            "dd-light": "#F8FAFC",
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/site/css/styles.css" />
+</head>
+
+<body class="bg-dd-light text-slate-800 antialiased selection:bg-dd-primary selection:text-white">
+  <nav class="fixed w-full top-0 z-50 transition-all duration-300" id="navbar">
+    <div class="absolute inset-0 bg-white/80 backdrop-blur-md shadow-sm border-b border-white/20"></div>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+      <div class="flex justify-between items-center py-4">
+        <a href="https://app.doordrop.space/" class="flex items-center gap-2 group">
+          <img src="/site/assets/logo.svg" alt="DoorDrop" class="h-10 transform group-hover:scale-105 transition-transform duration-300" />
+          <span class="font-bold text-xl text-slate-900 tracking-tight">DoorDrop</span>
+        </a>
+
+        <div class="hidden md:flex space-x-8 items-center">
+          <a href="/privacy.html" class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Privacy</a>
+          <a href="/terms.html" class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Terms</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Open App</a>
+        </div>
+
+        <div class="hidden md:flex space-x-4 items-center">
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="text-slate-700 font-medium hover:text-dd-primary transition-colors">Go to App</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="px-5 py-2.5 bg-gradient-to-r from-dd-primary to-emerald-400 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-emerald-500/30 transition-all transform hover:-translate-y-0.5">
+            Open App
+          </a>
+        </div>
+
+        <div class="md:hidden flex items-center">
+          <button id="mobile-menu-button"
+            class="p-2 rounded-lg hover:bg-slate-100 transition-colors focus:outline-none">
+            <svg class="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mobile-menu"
+      class="hidden md:hidden absolute w-full bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-xl">
+      <div class="px-4 py-6 space-y-4">
+        <a href="/privacy.html" class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Privacy</a>
+        <a href="/terms.html" class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Terms</a>
+        <a target="_blank" href="https://app.doordrop.space/"
+          class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Open App</a>
+        <div class="pt-4 flex flex-col space-y-3">
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="w-full text-center py-3 text-slate-700 font-semibold border border-slate-200 rounded-xl hover:bg-slate-50">Go to App</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="w-full text-center py-3 bg-dd-primary text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20">Open App</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-24 pb-16">
+    <section class="bg-white border-b border-slate-100">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-xs uppercase tracking-widest text-emerald-600 font-semibold">Legal</div>
+        <h1 class="text-4xl lg:text-5xl font-bold text-slate-900 mt-3 mb-4">Terms of Use</h1>
+        <p class="text-lg text-slate-600">Last updated: 2026-02-28</p>
+      </div>
+    </section>
+
+    <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">1. Scope</h2>
+        <p class="text-slate-600 text-sm">
+          These Terms govern your access to and use of DoorDrop services, including our website and legal pages (the "Site") and the DoorDrop web app (together, the "Services"). The DoorDrop application is available at
+          <a class="text-emerald-600 font-semibold hover:text-emerald-500" target="_blank"
+            href="https://app.doordrop.space/">app.doordrop.space</a>.
+          If additional terms are presented in the app for specific features, those terms apply to that feature.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">2. Acceptance</h2>
+        <p class="text-slate-600 text-sm">
+          By accessing or using the Site, you agree to these Terms. If you do not agree, do not use the Site.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">3. Definitions</h2>
+        <p class="text-slate-600 text-sm mb-4">
+          In these Terms:
+        </p>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">chevron_right</span><span><strong>"Business"</strong> means a user who creates or manages a letterbox delivery campaign.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">chevron_right</span><span><strong>"Walker"</strong> means a user who accepts and performs delivery work via the Services.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">chevron_right</span><span><strong>"Content"</strong> includes campaign materials, uploaded files, text, images, and any delivery proof (including photos) submitted through the Services.</span></li>
+        </ul>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">4. Service description</h2>
+        <p class="text-slate-600 text-sm">
+          DoorDrop is a marketplace platform that connects businesses needing letterbox delivery with independent walkers
+          who perform the deliveries. DoorDrop facilitates the connection but does not employ the walkers. Walkers are
+          independent contractors responsible for their own tax obligations, insurance, and compliance with applicable laws.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">5. Eligibility and accounts</h2>
+        <p class="text-slate-600 text-sm">
+          You must provide accurate information, keep your credentials secure, and promptly notify us of any unauthorised access to your account. If you are using the Services as a Business or Walker, you represent that you have the authority to do so and will comply with any eligibility requirements presented in the app.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">6. Business responsibilities</h2>
+        <p class="text-slate-600 text-sm">
+          Businesses are responsible for the legality and suitability of campaign materials and for ensuring campaign instructions are accurate. You must not use the Services to distribute prohibited, misleading, or unlawful materials. You are responsible for complying with any applicable advertising, consumer, and distribution laws and for respecting local restrictions and signage.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">7. Walker responsibilities</h2>
+        <p class="text-slate-600 text-sm">
+          Walkers are responsible for completing deliveries as agreed, providing accurate delivery status and location data (where enabled), and complying with applicable laws and safety requirements. You must follow reasonable campaign instructions and respect property signage (for example, "No Junk Mail" or similar notices) where applicable.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">8. Fees, payments, and refunds</h2>
+        <p class="text-slate-600 text-sm">
+          The Services may include fees (for example platform fees) and may use third-party payment processors. Fees, payout timing, and any refund rules will be shown in the app at the time you create a campaign or accept work. Unless required by law, fees may be non-refundable once work has started.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">9. Acceptable use</h2>
+        <p class="text-slate-600 text-sm mb-4">
+          You agree not to:
+        </p>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">block</span><span>Use the Site
+              for unlawful, harmful, or deceptive purposes.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">block</span><span>Falsify delivery
+              data or GPS tracking information.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">block</span><span>Attempt to
+              disrupt, scrape, or reverse engineer the Site or the app.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">block</span><span>Deliver illegal,
+              offensive, or prohibited materials through the platform.</span></li>
+        </ul>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">10. Content and intellectual property</h2>
+        <p class="text-slate-600 text-sm">
+          You retain ownership of Content you submit, but you grant DoorDrop a licence to host, store, reproduce, and display that Content as needed to operate the Services (including showing delivery proof to the relevant Business and Walker). The Site design, text, logos, and platform software are owned by their respective owners and are protected by intellectual property laws.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">11. Third-party services</h2>
+        <p class="text-slate-600 text-sm">
+          The Site may link to third-party websites and services (including mapping providers, social platforms, fonts,
+          and CDNs). We do not control and are not responsible for third-party content, policies, or practices.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">12. Disclaimers</h2>
+        <p class="text-slate-600 text-sm">
+          The Site and platform are provided "as is" and "as available". We do not guarantee delivery outcomes,
+          walker availability, or campaign results. Delivery quality depends on factors outside our control.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">13. Limitation of liability</h2>
+        <p class="text-slate-600 text-sm">
+          To the maximum extent permitted by law, DoorDrop and its contributors will not be liable for any indirect,
+          incidental, special, consequential, or punitive damages, or any loss of profits, revenue, data, or goodwill
+          arising from your use of the Site or platform.
+        </p>
+        <p class="text-slate-600 text-sm mt-3">
+          Nothing in these Terms excludes, restricts, or modifies any rights or remedies you may have under the Australian Consumer Law (or similar consumer protection laws) that cannot be excluded.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">14. Suspension and termination</h2>
+        <p class="text-slate-600 text-sm">
+          We may suspend or terminate access to the Services if we reasonably believe you have violated these Terms, created risk to other users, or used the Services in an abusive or unlawful way. You may stop using the Services at any time.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">15. Changes</h2>
+        <p class="text-slate-600 text-sm">
+          We may update these Terms from time to time. Continued use of the Site after changes means you accept the
+          updated Terms.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">16. Contact</h2>
+        <p class="text-slate-600 text-sm">
+          For questions, contact DoorDrop via our LinkedIn page:
+          <a
+            class="text-emerald-600 font-semibold hover:text-emerald-500"
+            target="_blank"
+            rel="noreferrer"
+            href="https://linkedin.com/company/doordrop-space"
+            >linkedin.com/company/doordrop-space</a
+          >.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row justify-between gap-4">
+        <a target="_blank" href="https://app.doordrop.space/" class="text-slate-600 font-medium hover:text-emerald-600">Go to app</a>
+        <a href="/privacy.html"
+          class="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-semibold transition-all">
+          Privacy Policy
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-gray-900 text-white py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="text-gray-400">DoorDrop</div>
+        <div class="flex gap-4 text-sm text-gray-400">
+          <a href="/privacy.html" class="hover:text-white">Privacy</a>
+          <a href="/terms.html" class="hover:text-white">Terms</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/site/js/script.js"></script>
+</body>
+
+</html>

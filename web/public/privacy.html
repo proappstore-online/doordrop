@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoorDrop - Privacy Policy</title>
+  <link rel="icon" href="/site/assets/favicon.svg" type="image/svg+xml" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            "dd-primary": "#10B981",
+            "dd-secondary": "#3B82F6",
+            "dd-dark": "#0F172A",
+            "dd-light": "#F8FAFC",
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/site/css/styles.css" />
+</head>
+
+<body class="bg-dd-light text-slate-800 antialiased selection:bg-dd-primary selection:text-white">
+  <nav class="fixed w-full top-0 z-50 transition-all duration-300" id="navbar">
+    <div class="absolute inset-0 bg-white/80 backdrop-blur-md shadow-sm border-b border-white/20"></div>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+      <div class="flex justify-between items-center py-4">
+        <a href="https://app.doordrop.space/" class="flex items-center gap-2 group">
+          <img src="/site/assets/logo.svg" alt="DoorDrop" class="h-10 transform group-hover:scale-105 transition-transform duration-300" />
+          <span class="font-bold text-xl text-slate-900 tracking-tight">DoorDrop</span>
+        </a>
+
+        <div class="hidden md:flex space-x-8 items-center">
+          <a href="/privacy.html" class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Privacy</a>
+          <a href="/terms.html" class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Terms</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="text-slate-600 font-medium hover:text-dd-primary transition-colors">Open App</a>
+        </div>
+
+        <div class="hidden md:flex space-x-4 items-center">
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="text-slate-700 font-medium hover:text-dd-primary transition-colors">Go to App</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="px-5 py-2.5 bg-gradient-to-r from-dd-primary to-emerald-400 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-emerald-500/30 transition-all transform hover:-translate-y-0.5">
+            Open App
+          </a>
+        </div>
+
+        <div class="md:hidden flex items-center">
+          <button id="mobile-menu-button"
+            class="p-2 rounded-lg hover:bg-slate-100 transition-colors focus:outline-none">
+            <svg class="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mobile-menu"
+      class="hidden md:hidden absolute w-full bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-xl">
+      <div class="px-4 py-6 space-y-4">
+        <a href="/privacy.html" class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Privacy</a>
+        <a href="/terms.html" class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Terms</a>
+        <a target="_blank" href="https://app.doordrop.space/"
+          class="block text-lg font-medium text-slate-700 hover:text-dd-primary">Open App</a>
+        <div class="pt-4 flex flex-col space-y-3">
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="w-full text-center py-3 text-slate-700 font-semibold border border-slate-200 rounded-xl hover:bg-slate-50">Go to App</a>
+          <a target="_blank" href="https://app.doordrop.space/"
+            class="w-full text-center py-3 bg-dd-primary text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20">Open App</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-24 pb-16">
+    <section class="bg-white border-b border-slate-100">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-xs uppercase tracking-widest text-emerald-600 font-semibold">Legal</div>
+        <h1 class="text-4xl lg:text-5xl font-bold text-slate-900 mt-3 mb-4">Privacy Policy</h1>
+        <p class="text-lg text-slate-600">Last updated: 2026-02-28</p>
+      </div>
+    </section>
+
+    <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">1. Overview</h2>
+        <p class="text-slate-600 text-sm">
+          This Privacy Policy explains how DoorDrop ("we", "us") collects, uses, and shares information when you
+          visit our website and when you use our related services. The DoorDrop application is available at
+          <a class="text-emerald-600 font-semibold hover:text-emerald-500" target="_blank"
+            href="https://app.doordrop.space/">app.doordrop.space</a>.
+          This policy applies to both the Site and the app unless a specific notice says otherwise. We aim to handle personal information in accordance with the Australian Privacy Principles to the extent applicable.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">2. Information we collect</h2>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Website usage</strong>: basic log data such as device type, pages visited, and approximate location (via IP) if collected by hosting or analytics providers.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Communications</strong>: information you send us (for example support requests, feedback, and messages).</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Account and profile data</strong>: details you provide to create an account and use the Services (for example name, email, phone, and business or walker profile information).</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Campaign data</strong>: campaign settings, selected areas/streets, delivery instructions, and files you upload (such as flyer artwork).</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Delivery and location data</strong>: delivery status events and, where enabled, location/GPS data and timestamps used to support tracking and reporting.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Proof of delivery</strong>: photos or other evidence submitted through the Services (depending on the campaign requirements).</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Verification information</strong>: information you choose to provide to support trust and safety (for example verification status or documents related to identity or eligibility).</span></li>
+        </ul>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">3. How we use information</h2>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span>Provide and improve the website and platform experience.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span>Operate, secure, and debug services.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span>Match walkers with campaigns based on location and availability.</span></li>
+          <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span>Communicate with you about campaigns, deliveries, or support.</span></li>
+        </ul>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">4. Cookies and third-party resources</h2>
+        <p class="text-slate-600 text-sm">
+          This website loads third-party resources (for example Tailwind CDN, Google Fonts, and Swiper). Those providers
+          may receive technical information (such as your IP address and user agent) as part of delivering content.
+          Depending on configuration, we or our hosting provider may also use cookies or similar technologies for basic
+          functionality, performance, or analytics.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">5. Sharing</h2>
+        <div class="space-y-3 text-slate-600 text-sm">
+          <p>
+            We share information in the following ways:
+          </p>
+          <ul class="space-y-2 text-sm text-slate-600">
+            <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Between users</strong>: to run a campaign, Businesses and Walkers can see relevant information about each other and the campaign (for example campaign details, in-app messages, and delivery proof/reporting).</span></li>
+            <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Service providers</strong>: vendors that help us operate the Services (for example hosting/infrastructure, mapping, email/SMS, payments, and support tooling) may process information on our behalf.</span></li>
+            <li class="flex gap-2"><span class="material-icons text-emerald-500 text-base">check_circle</span><span><strong>Legal and safety</strong>: where required by law, or to protect users, prevent fraud/abuse, or enforce our terms.</span></li>
+          </ul>
+          <p>
+            Some service providers may store or process information outside Australia. Where this happens, we take reasonable steps to ensure appropriate protections are in place.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">6. Data retention</h2>
+        <p class="text-slate-600 text-sm">
+          We keep information only as long as needed for the purposes described in this policy, unless a longer
+          retention period is required by law or necessary for security and abuse prevention.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">7. Security</h2>
+        <p class="text-slate-600 text-sm">
+          We use reasonable administrative and technical safeguards to help protect information. No method of
+          transmission or storage is 100% secure.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">8. Your choices</h2>
+        <p class="text-slate-600 text-sm">
+          You may be able to control cookies through your browser settings. If you use the DoorDrop application, you
+          may be able to review or update certain profile information within the app. You can also request access to or correction of personal information by contacting us.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-2">9. Contact</h2>
+        <p class="text-slate-600 text-sm">
+          For privacy questions, contact DoorDrop via our LinkedIn page:
+          <a
+            class="text-emerald-600 font-semibold hover:text-emerald-500"
+            target="_blank"
+            rel="noreferrer"
+            href="https://linkedin.com/company/doordrop-space"
+            >linkedin.com/company/doordrop-space</a
+          >.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row justify-between gap-4">
+        <a target="_blank" href="https://app.doordrop.space/" class="text-slate-600 font-medium hover:text-emerald-600">Go to app</a>
+        <a href="/terms.html"
+          class="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-semibold transition-all">
+          Terms of Use
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-gray-900 text-white py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="text-gray-400">DoorDrop</div>
+        <div class="flex gap-4 text-sm text-gray-400">
+          <a href="/privacy.html" class="hover:text-white">Privacy</a>
+          <a href="/terms.html" class="hover:text-white">Terms</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/site/js/script.js"></script>
+</body>
+
+</html>
