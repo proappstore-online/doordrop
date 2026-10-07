@@ -8,7 +8,7 @@
 -- Applied via the platform Data Worker's POST /migrate endpoint, which splits
 -- on `;` and runs each statement. No semicolons inside string literals here.
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT,
   name TEXT,
@@ -36,11 +36,11 @@ CREATE TABLE users (
   last_logged_in_at INTEGER
 );
 
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_campaign ON users(campaign_id);
-CREATE INDEX idx_users_suburb_postcode ON users(suburb, postcode);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_campaign ON users(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_users_suburb_postcode ON users(suburb, postcode);
 
-CREATE TABLE campaigns (
+CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   name_key TEXT,
@@ -73,11 +73,11 @@ CREATE TABLE campaigns (
   updated_at INTEGER
 );
 
-CREATE INDEX idx_campaigns_assigned_walker ON campaigns(assigned_walker_id);
-CREATE INDEX idx_campaigns_status ON campaigns(status);
-CREATE INDEX idx_campaigns_suburb_postcode ON campaigns(suburb, postcode);
+CREATE INDEX IF NOT EXISTS idx_campaigns_assigned_walker ON campaigns(assigned_walker_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_campaigns_suburb_postcode ON campaigns(suburb, postcode);
 
-CREATE TABLE properties (
+CREATE TABLE IF NOT EXISTS properties (
   id TEXT PRIMARY KEY,
   address TEXT NOT NULL,
   street_name TEXT,
@@ -92,11 +92,11 @@ CREATE TABLE properties (
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_properties_suburb_postcode ON properties(suburb, postcode);
+CREATE INDEX IF NOT EXISTS idx_properties_suburb_postcode ON properties(suburb, postcode);
 
-CREATE TABLE property_reports (
+CREATE TABLE IF NOT EXISTS property_reports (
   id TEXT PRIMARY KEY,
-  property_id TEXT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  property_id TEXT NOT NULL REFERENCES properties(id),
   reason TEXT NOT NULL CHECK (reason IN ('no_house','construction','angry_owner','no_junk_mail','other')),
   photo_url TEXT,
   notes TEXT,
@@ -105,12 +105,12 @@ CREATE TABLE property_reports (
   campaign_id TEXT
 );
 
-CREATE INDEX idx_property_reports_property ON property_reports(property_id);
-CREATE INDEX idx_property_reports_reported_by ON property_reports(reported_by);
+CREATE INDEX IF NOT EXISTS idx_property_reports_property ON property_reports(property_id);
+CREATE INDEX IF NOT EXISTS idx_property_reports_reported_by ON property_reports(reported_by);
 
-CREATE TABLE doors (
+CREATE TABLE IF NOT EXISTS doors (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   address TEXT NOT NULL,
   street_name TEXT,
   house_number TEXT,
@@ -124,10 +124,10 @@ CREATE TABLE doors (
   property_id TEXT REFERENCES properties(id)
 );
 
-CREATE INDEX idx_doors_campaign ON doors(campaign_id);
-CREATE INDEX idx_doors_property ON doors(property_id);
+CREATE INDEX IF NOT EXISTS idx_doors_campaign ON doors(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_doors_property ON doors(property_id);
 
-CREATE TABLE flyers (
+CREATE TABLE IF NOT EXISTS flyers (
   id TEXT PRIMARY KEY,
   owner_id TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -137,11 +137,11 @@ CREATE TABLE flyers (
   created_by TEXT NOT NULL
 );
 
-CREATE INDEX idx_flyers_owner ON flyers(owner_id);
+CREATE INDEX IF NOT EXISTS idx_flyers_owner ON flyers(owner_id);
 
-CREATE TABLE printouts (
+CREATE TABLE IF NOT EXISTS printouts (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   version INTEGER NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
@@ -151,11 +151,11 @@ CREATE TABLE printouts (
   created_by TEXT NOT NULL
 );
 
-CREATE INDEX idx_printouts_campaign ON printouts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_printouts_campaign ON printouts(campaign_id);
 
-CREATE TABLE delivery_runs (
+CREATE TABLE IF NOT EXISTS delivery_runs (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   walker_id TEXT,
   status TEXT CHECK (status IN ('scheduled','completed')),
   date INTEGER NOT NULL,
@@ -163,23 +163,23 @@ CREATE TABLE delivery_runs (
   updated_at INTEGER
 );
 
-CREATE INDEX idx_delivery_runs_campaign ON delivery_runs(campaign_id);
-CREATE INDEX idx_delivery_runs_walker ON delivery_runs(walker_id);
-CREATE INDEX idx_delivery_runs_date ON delivery_runs(date);
+CREATE INDEX IF NOT EXISTS idx_delivery_runs_campaign ON delivery_runs(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_runs_walker ON delivery_runs(walker_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_runs_date ON delivery_runs(date);
 
-CREATE TABLE track_sessions (
+CREATE TABLE IF NOT EXISTS track_sessions (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   walker_id TEXT NOT NULL,
   started_at INTEGER NOT NULL,
   ended_at INTEGER
 );
 
-CREATE INDEX idx_track_sessions_campaign ON track_sessions(campaign_id);
-CREATE INDEX idx_track_sessions_walker ON track_sessions(walker_id);
+CREATE INDEX IF NOT EXISTS idx_track_sessions_campaign ON track_sessions(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_track_sessions_walker ON track_sessions(walker_id);
 
-CREATE TABLE track_points (
-  session_id TEXT NOT NULL REFERENCES track_sessions(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS track_points (
+  session_id TEXT NOT NULL REFERENCES track_sessions(id),
   t INTEGER NOT NULL,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
@@ -187,30 +187,30 @@ CREATE TABLE track_points (
   PRIMARY KEY (session_id, t)
 );
 
-CREATE TABLE track_stops (
+CREATE TABLE IF NOT EXISTS track_stops (
   id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES track_sessions(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES track_sessions(id),
   lat REAL NOT NULL,
   lng REAL NOT NULL,
   start_time INTEGER NOT NULL,
   end_time INTEGER NOT NULL
 );
 
-CREATE INDEX idx_track_stops_session ON track_stops(session_id);
+CREATE INDEX IF NOT EXISTS idx_track_stops_session ON track_stops(session_id);
 
-CREATE TABLE walker_interests (
+CREATE TABLE IF NOT EXISTS walker_interests (
   id TEXT PRIMARY KEY,
   walker_id TEXT NOT NULL,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   created_at INTEGER NOT NULL,
   updated_at INTEGER,
   UNIQUE (walker_id, campaign_id)
 );
 
-CREATE INDEX idx_walker_interests_walker ON walker_interests(walker_id);
-CREATE INDEX idx_walker_interests_campaign ON walker_interests(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_walker_interests_walker ON walker_interests(walker_id);
+CREATE INDEX IF NOT EXISTS idx_walker_interests_campaign ON walker_interests(campaign_id);
 
-CREATE TABLE walker_reviews (
+CREATE TABLE IF NOT EXISTS walker_reviews (
   id TEXT PRIMARY KEY,
   walker_id TEXT NOT NULL,
   reviewer_id TEXT NOT NULL,
@@ -223,10 +223,10 @@ CREATE TABLE walker_reviews (
   updated_at INTEGER
 );
 
-CREATE INDEX idx_walker_reviews_walker ON walker_reviews(walker_id);
-CREATE INDEX idx_walker_reviews_reviewer ON walker_reviews(reviewer_id);
+CREATE INDEX IF NOT EXISTS idx_walker_reviews_walker ON walker_reviews(walker_id);
+CREATE INDEX IF NOT EXISTS idx_walker_reviews_reviewer ON walker_reviews(reviewer_id);
 
-CREATE TABLE history_records (
+CREATE TABLE IF NOT EXISTS history_records (
   id TEXT PRIMARY KEY,
   walker_id TEXT NOT NULL,
   date INTEGER NOT NULL,
@@ -236,10 +236,10 @@ CREATE TABLE history_records (
   duration_min INTEGER
 );
 
-CREATE INDEX idx_history_records_walker ON history_records(walker_id);
-CREATE INDEX idx_history_records_date ON history_records(date);
+CREATE INDEX IF NOT EXISTS idx_history_records_walker ON history_records(walker_id);
+CREATE INDEX IF NOT EXISTS idx_history_records_date ON history_records(date);
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('walker_interested','walker_assigned')),
@@ -250,30 +250,31 @@ CREATE TABLE notifications (
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_notifications_user_unread ON notifications(user_id, read);
-CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
 
-CREATE TABLE campaign_notes (
+CREATE TABLE IF NOT EXISTS campaign_notes (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   user_id TEXT NOT NULL,
   user_name TEXT NOT NULL,
   text TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_campaign_notes_campaign_created ON campaign_notes(campaign_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_campaign_notes_campaign_created ON campaign_notes(campaign_id, created_at);
 
-CREATE TABLE chat_read_state (
+CREATE TABLE IF NOT EXISTS chat_read_state (
   user_id TEXT NOT NULL,
   campaign_id TEXT NOT NULL,
   last_read_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, campaign_id)
 );
 
-CREATE TABLE platform_config (
+CREATE TABLE IF NOT EXISTS platform_config (
   id TEXT PRIMARY KEY DEFAULT 'platform',
   default_payment_mode TEXT NOT NULL CHECK (default_payment_mode IN ('direct','platform'))
 );
 
 INSERT INTO platform_config (id, default_payment_mode) VALUES ('platform', 'platform')
+  ON CONFLICT(id) DO NOTHING;

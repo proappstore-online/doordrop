@@ -32,8 +32,9 @@ export function toolStatements(tool: Tool): string[] {
 export function freshDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
-  db.exec(readFileSync(new URL('../../migrations/0001_init.sql', import.meta.url), 'utf8'));
-  db.exec(readFileSync(new URL('../../migrations/0002_bookings.sql', import.meta.url), 'utf8'));
+  // The same migrations.json the deploy workflow sends to the platform.
+  const { migrations } = JSON.parse(readFileSync(new URL('../../migrations.json', import.meta.url), 'utf8')) as { migrations: { sql: string }[] };
+  for (const m of migrations) db.exec(m.sql);
   return db;
 }
 

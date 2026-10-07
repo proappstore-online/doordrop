@@ -38,7 +38,7 @@ DoorDrop's authz (campaign-admin vs assigned-walker × per-field allow-lists) ne
 - Every read and write is a **registered action** in `mcp.json`, run as the caller (`:__user_id`). Rules SQL can express — campaign admin, assigned walker, app admin (`users.role = 'admin'`), owner-only rows, the walker's door-field allow-list, `delivered_by` = self, `access_user_ids` never shrinks, `payment_mode` set-once — are in the action SQL, because **a signed-in user can call any of these actions directly**, bypassing the worker. The worker keeps the request validation and the 400/403/404/409 answers.
 - Actions marked `auth.caller_unscoped` are the reads the old worker left open to any signed-in user (users, campaigns, doors, printouts, interests, reviews, history, config). Kept as-is by the faithful port; tightening them is separate work.
 - `pas-data-doordrop` is the platform's generic data worker **by design** now; fleet redeploys don't touch the app worker.
-- Not live until the platform enables app workers for doordrop (blocked on platform#274 and the deploy step in platform#305).
+- The canonical deploy workflow builds `worker/` and uploads it to the platform keyless (OIDC). The deploy fails until a platform admin enables app workers for doordrop (`PUT /v1/admin/apps/doordrop/worker-enabled`); once enabled, `GET /.pas/worker/v1/me` answers 401/200 from the app worker.
 
 ### Wire format ↔ domain models
 
@@ -113,7 +113,7 @@ migrations/
 
 ## How to add a feature
 
-1. **Storage**: if a new column or table — add a new `migrations/000N_*.sql`. The worker can no longer run DDL; until the app moves to the platform's `migrations.json` deploy step, apply it through the platform data worker's role-gated `/migrate`.
+1. **Storage**: if a new column or table — add a new `migrations/000N_*.sql`. The worker cannot run DDL: the deploy applies `migrations.json` (ledgered in `_migrations`) to D1 before anything else ships. Add the same SQL as a new `{ "name": "000N_*", "sql": "..." }` entry in `migrations.json` (the worker tests build their SQLite from it). Migrations must be additive and idempotent (`IF NOT EXISTS`, `INSERT ... ON CONFLICT DO NOTHING`), and the platform lint rejects any statement containing DROP/DELETE/UPDATE/RENAME/REPLACE/PRAGMA, including `ON DELETE CASCADE`.
 2. **Action**: add it to `mcp.json`. Scope every statement with `:__user_id` (or declare `auth.caller_unscoped` with a reason) and put the authz in the SQL — users can call actions directly. Partial updates take a `patch` JSON param (`CASE WHEN json_type(:patch, '$.col') IS NULL THEN col ELSE json_extract(:patch, '$.col') END`).
 3. **Worker endpoint**: add a route in `worker/src/routes/<resource>.ts` that validates the request, resolves 404 vs 403 with `auth.ts`, and calls the action. Mount it in `worker/src/app.ts`. Add the access cases to `worker/test/authz.test.ts`, both through the worker and straight at the action.
 4. **Repository**: add or extend in `web/src/repositories/`. Run requests through `lib/api.ts`'s `apiGet/apiPost/apiPatch/apiPut/apiDelete`. Use `toWire(data)` on writes and `fromWire(response)` on reads — never expose snake_case to the page layer.
@@ -124,7 +124,7 @@ migrations/
 
 Push to `main`. `.github/workflows/deploy.yml` is the platform's canonical workflow (keep it byte-identical to `packages/admin/src/__fixtures__/canonical-deploy.yml` in `proappstore-online/platform`): it builds `web/`, registers `mcp.json`, and uploads to R2 with keyless GitHub OIDC credentials. No repo secrets, no wrangler.
 
-The app worker is built (`pnpm --filter @doordrop/worker build`) but **not deployed yet**: the canonical workflow's worker step is platform#305, and app workers are enabled per app by a platform admin.
+The workflow also applies `migrations.json` (before the frontend and `mcp.json`) and builds and deploys the app worker (`worker/dist/app.js`). App workers are enabled per app by a platform admin; until then the worker step fails the deploy.
 
 ## Gotchas
 

@@ -1,8 +1,8 @@
 -- ShareHire bookings: a campaign admin books a walker for a day (issue #6).
 -- Was the Firestore campaigns/{id}/bookings subcollection.
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id),
   walker_id TEXT NOT NULL,
   walker_name TEXT,
   client_id TEXT NOT NULL,
@@ -16,5 +16,5 @@ CREATE TABLE bookings (
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_bookings_campaign_created ON bookings(campaign_id, created_at);
-CREATE INDEX idx_bookings_walker ON bookings(walker_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_campaign_created ON bookings(campaign_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_walker ON bookings(walker_id);
