@@ -77,7 +77,8 @@ describe('a client cannot edit another client\'s campaign', () => {
   it('straight at the actions', async () => {
     const patch = JSON.stringify({ name: 'mine now', admin_ids: [CLIENT_2] });
     expect((await direct(CLIENT_2, 'update_campaign', { id: campaignId, patch })).meta.changes).toBe(0);
-    expect((await direct(CLIENT_2, 'delete_campaign', { id: campaignId })).meta.changes).toBe(0);
+    await direct(CLIENT_2, 'delete_campaign', { id: campaignId });
+    expect(row('SELECT COUNT(*) AS n FROM campaigns WHERE id = ?', campaignId).n).toBe(1);
     expect((await direct(CLIENT_2, 'create_door', { id: 'd2', campaign_id: campaignId, address: '2 Elm St' })).meta.changes).toBe(0);
     expect((await direct(CLIENT_2, 'notify_walker_assigned', { campaign_id: campaignId, walker_id: WALKER_1 })).meta.changes).toBe(0);
     // A campaign the caller is not an admin of cannot be created either.
@@ -94,6 +95,56 @@ describe('a client cannot edit another client\'s campaign', () => {
     const notes = (await req(WALKER_2, 'GET', '/v1/notifications')).body;
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({ type: 'walker_assigned', campaign_id: campaignId, body: "You're delivering for Elm St drop" });
+  });
+});
+
+describe('deleting a campaign (the schema has no ON DELETE CASCADE)', () => {
+  const count = (table: string) => row(`SELECT COUNT(*) AS n FROM ${table}`).n;
+  const CHILDREN = ['doors', 'printouts', 'delivery_runs', 'track_sessions', 'track_points', 'track_stops', 'walker_interests', 'campaign_notes', 'bookings'];
+  const booking = (id: string, campaign: string) =>
+    `INSERT INTO bookings (id, campaign_id, walker_id, client_id, date, door_count, rate_per_door, total_price, price_per_member, member_count, created_at)
+       VALUES ('${id}', '${campaign}', '${WALKER_1}', '${CLIENT_1}', 1, 1, 1, 1, 1, 1, 1);`;
+
+  function seedChildren() {
+    db.exec(`
+      INSERT INTO printouts (id, campaign_id, version, name, created_at, created_by) VALUES ('p1', '${campaignId}', 1, 'flyer', 1, '${CLIENT_1}');
+      INSERT INTO delivery_runs (id, campaign_id, walker_id, status, date, created_at) VALUES ('r1', '${campaignId}', '${WALKER_1}', 'scheduled', 1, 1);
+      INSERT INTO track_sessions (id, campaign_id, walker_id, started_at) VALUES ('s1', '${campaignId}', '${WALKER_1}', 1);
+      INSERT INTO track_points (session_id, t, lat, lng) VALUES ('s1', 1, 1, 2);
+      INSERT INTO track_stops (id, session_id, lat, lng, start_time, end_time) VALUES ('st1', 's1', 1, 2, 1, 2);
+      INSERT INTO walker_interests (id, walker_id, campaign_id, created_at) VALUES ('i1', '${WALKER_2}', '${campaignId}', 1);
+      INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n1', '${campaignId}', '${CLIENT_1}', 'C1', 'hi', 1);
+      ${booking('b1', campaignId)}
+      INSERT INTO campaigns (id, name, status, admin_ids, created_at) VALUES ('other', 'Other', 'draft', '["${CLIENT_1}"]', 1);
+      INSERT INTO doors (id, campaign_id, address, status) VALUES ('od', 'other', '9 Oak St', 'pending');
+      ${booking('ob', 'other')}
+    `);
+  }
+
+  it('is refused for a non-admin, through the worker and at the action', async () => {
+    seedChildren();
+    const before = Object.fromEntries(CHILDREN.map((t) => [t, count(t)]));
+    expect((await req(CLIENT_2, 'DELETE', `/v1/campaigns/${campaignId}`)).status).toBe(403);
+    await direct(CLIENT_2, 'delete_campaign', { id: campaignId });
+    await direct(WALKER_1, 'delete_campaign', { id: campaignId });
+    expect(row('SELECT COUNT(*) AS n FROM campaigns WHERE id = ?', campaignId).n).toBe(1);
+    expect(Object.fromEntries(CHILDREN.map((t) => [t, count(t)]))).toEqual(before);
+  });
+
+  it('removes the campaign and all its children for the campaign admin, through the worker', async () => {
+    seedChildren();
+    expect((await req(CLIENT_1, 'DELETE', `/v1/campaigns/${campaignId}`)).status).toBe(200);
+    expect(row('SELECT COUNT(*) AS n FROM campaigns WHERE id = ?', campaignId).n).toBe(0);
+    // Only the other campaign's door and booking remain.
+    for (const t of CHILDREN) expect(count(t), t).toBe(t === 'doors' || t === 'bookings' ? 1 : 0);
+    expect(row("SELECT COUNT(*) AS n FROM campaigns WHERE id = 'other'").n).toBe(1);
+  });
+
+  it('removes them straight at the action too', async () => {
+    seedChildren();
+    await direct(CLIENT_1, 'delete_campaign', { id: campaignId });
+    expect(row('SELECT COUNT(*) AS n FROM campaigns WHERE id = ?', campaignId).n).toBe(0);
+    for (const t of CHILDREN) expect(count(t), t).toBe(t === 'doors' || t === 'bookings' ? 1 : 0);
   });
 });
 

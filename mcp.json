@@ -359,9 +359,20 @@
     },
     {
       "name": "delete_campaign",
-      "description": "Campaign admin: delete a campaign",
-      "operation": "execute",
-      "sql": "DELETE FROM campaigns WHERE id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+      "description": "Campaign admin: delete a campaign and its dependent rows (the schema has no ON DELETE CASCADE)",
+      "operation": "batch",
+      "statements": [
+        "DELETE FROM track_points WHERE session_id IN (SELECT id FROM track_sessions WHERE campaign_id = :id) AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM track_stops WHERE session_id IN (SELECT id FROM track_sessions WHERE campaign_id = :id) AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM track_sessions WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM doors WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM printouts WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM delivery_runs WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM walker_interests WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM campaign_notes WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM bookings WHERE campaign_id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)",
+        "DELETE FROM campaigns WHERE id = :id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :id AND aj.value = :__user_id)"
+      ],
       "params": {
         "id": {
           "type": "string"
