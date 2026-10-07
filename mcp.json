@@ -1251,6 +1251,59 @@
         }
       },
       "requires_auth": true
+    },
+    {
+      "name": "list_delivery_runs",
+      "description": "A campaign's delivery runs (campaign admin, assigned walker or app admin), soonest first",
+      "operation": "query",
+      "sql": "SELECT id, campaign_id, walker_id, status, date, created_at, updated_at FROM delivery_runs WHERE campaign_id = :campaign_id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY date ASC LIMIT 500",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "get_delivery_run",
+      "description": "One delivery run (campaign admin, assigned walker or app admin)",
+      "operation": "query",
+      "sql": "SELECT id, campaign_id, walker_id, status, date, created_at, updated_at FROM delivery_runs WHERE id = :id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = delivery_runs.campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = delivery_runs.campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin'))",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "create_delivery_run",
+      "description": "Campaign admin: schedule a delivery run and touch the campaign",
+      "operation": "batch",
+      "statements": [
+        "INSERT INTO delivery_runs (id, campaign_id, walker_id, status, date, created_at) SELECT :id, :campaign_id, :walker_id, COALESCE(:status, 'scheduled'), :date, :__now WHERE COALESCE(:status, 'scheduled') IN ('scheduled','completed') AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+        "UPDATE campaigns SET updated_at = :__now WHERE id = :campaign_id AND EXISTS (SELECT 1 FROM delivery_runs WHERE id = :id AND campaign_id = :campaign_id) AND EXISTS (SELECT 1 FROM json_each(admin_ids) aj WHERE aj.value = :__user_id)"
+      ],
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "walker_id": {
+          "type": "string",
+          "optional": true
+        },
+        "status": {
+          "type": "string",
+          "optional": true
+        },
+        "date": {
+          "type": "number"
+        }
+      },
+      "requires_auth": true
     }
   ]
 }

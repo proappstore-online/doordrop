@@ -15,6 +15,7 @@ import notifications from './routes/notifications.js';
 import notes from './routes/notes.js';
 import tracking from './routes/tracking.js';
 import config from './routes/config.js';
+import deliveryRuns from './routes/deliveryRuns.js';
 
 /**
  * doordrop's API, served at /.pas/worker/v1/* on the app origin. The platform
@@ -37,6 +38,7 @@ app.route('/v1', notifications);
 app.route('/v1', notes);
 app.route('/v1', tracking);
 app.route('/v1', config);
+app.route('/v1', deliveryRuns);
 
 // ---------------------------------------------------------------------------
 // /v1/me — current user + role; signals first-time role-picker need.

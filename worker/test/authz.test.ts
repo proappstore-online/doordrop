@@ -277,6 +277,49 @@ describe('properties', () => {
   });
 });
 
+describe('delivery runs belong to the campaign admin and the assigned walker', () => {
+  it('through the worker', async () => {
+    const path = `/v1/campaigns/${campaignId}/delivery-runs`;
+    expect((await req(CLIENT_2, 'POST', path, { date: 1000 })).status).toBe(403);
+    expect((await req(WALKER_1, 'POST', path, { date: 1000 })).status).toBe(403);
+    expect((await req(CLIENT_1, 'POST', path, { date: 'soon' })).status).toBe(400);
+    expect((await req(CLIENT_1, 'POST', '/v1/campaigns/nope/delivery-runs', { date: 1 })).status).toBe(404);
+    const created = await req(CLIENT_1, 'POST', path, { date: 2000, walkerId: WALKER_1 });
+    expect(created.status).toBe(201);
+    expect((await req(CLIENT_1, 'POST', path, { date: 1000 })).status).toBe(201);
+
+    for (const user of [CLIENT_1, WALKER_1, ADMIN]) {
+      const list = (await req(user, 'GET', path)).body;
+      expect(list.map((r: any) => r.date)).toEqual([1000, 2000]);
+      expect((await req(user, 'GET', `/v1/delivery-runs/${created.body.id}`)).body).toMatchObject({ status: 'scheduled', walker_id: WALKER_1 });
+    }
+    for (const user of [CLIENT_2, WALKER_2]) {
+      expect((await req(user, 'GET', path)).status).toBe(403);
+      expect((await req(user, 'GET', `/v1/delivery-runs/${created.body.id}`)).status).toBe(404);
+    }
+    expect((await req(CLIENT_1, 'GET', '/v1/campaigns/nope/delivery-runs')).status).toBe(404);
+  });
+
+  it('straight at the actions', async () => {
+    const params = { id: 'r1', campaign_id: campaignId, date: 1000 };
+    for (const user of [CLIENT_2, WALKER_1, WALKER_2]) {
+      await direct(user, 'create_delivery_run', params);
+    }
+    expect(row('SELECT COUNT(*) AS n FROM delivery_runs').n).toBe(0);
+    await direct(CLIENT_1, 'create_delivery_run', { ...params, status: 'bogus' }).catch(() => {});
+    expect(row('SELECT COUNT(*) AS n FROM delivery_runs').n).toBe(0);
+    await direct(CLIENT_1, 'create_delivery_run', params);
+    expect(row('SELECT COUNT(*) AS n FROM delivery_runs').n).toBe(1);
+    expect(row('SELECT updated_at FROM campaigns WHERE id = ?', campaignId).updated_at).not.toBeNull();
+
+    expect((await direct(CLIENT_2, 'list_delivery_runs', { campaign_id: campaignId })).rows).toEqual([]);
+    expect((await direct(WALKER_2, 'list_delivery_runs', { campaign_id: campaignId })).rows).toEqual([]);
+    expect((await direct(WALKER_2, 'get_delivery_run', { id: 'r1' })).rows).toEqual([]);
+    expect((await direct(WALKER_1, 'list_delivery_runs', { campaign_id: campaignId })).rows).toHaveLength(1);
+    expect((await direct(ADMIN, 'get_delivery_run', { id: 'r1' })).rows).toHaveLength(1);
+  });
+});
+
 describe('the app worker module', () => {
   it('serves an http envelope through defineAppWorker with actions run as the caller', async () => {
     const pas = fakePas(db, CLIENT_1);
