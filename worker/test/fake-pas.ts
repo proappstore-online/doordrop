@@ -33,6 +33,7 @@ export function freshDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(readFileSync(new URL('../../migrations/0001_init.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../../migrations/0002_bookings.sql', import.meta.url), 'utf8'));
   return db;
 }
 

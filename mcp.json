@@ -1304,6 +1304,45 @@
         }
       },
       "requires_auth": true
+    },
+    {
+      "name": "list_campaign_bookings",
+      "description": "A campaign's ShareHire bookings (campaign admin or the booked walker), newest first",
+      "operation": "query",
+      "sql": "SELECT * FROM bookings WHERE campaign_id = :campaign_id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR walker_id = :__user_id) ORDER BY created_at DESC LIMIT 500",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "create_booking",
+      "description": "Book a walker for a campaign (campaign admin only); price is computed from the walker's rate",
+      "operation": "execute",
+      "sql": "INSERT INTO bookings (id, campaign_id, walker_id, walker_name, client_id, date, door_count, rate_per_door, total_price, price_per_member, member_count, status, created_at) SELECT :id, :campaign_id, w.id, w.name, :__user_id, :date, :door_count, COALESCE(CAST(json_extract(w.walker_profile, '$.ratePerDoor') AS REAL), 0), :door_count * COALESCE(CAST(json_extract(w.walker_profile, '$.ratePerDoor') AS REAL), 0), CASE WHEN COALESCE((SELECT json_array_length(cm.member_ids) FROM campaigns cm WHERE cm.id = :campaign_id), 0) > 0 THEN :door_count * COALESCE(CAST(json_extract(w.walker_profile, '$.ratePerDoor') AS REAL), 0) / COALESCE((SELECT json_array_length(cm.member_ids) FROM campaigns cm WHERE cm.id = :campaign_id), 0) ELSE 0 END, COALESCE((SELECT json_array_length(cm.member_ids) FROM campaigns cm WHERE cm.id = :campaign_id), 0), 'pending', :created_at FROM users w WHERE w.id = :walker_id AND w.role = 'walker' AND :door_count BETWEEN 1 AND 100000 AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "campaign_id": {
+          "type": "string"
+        },
+        "walker_id": {
+          "type": "string"
+        },
+        "date": {
+          "type": "number"
+        },
+        "door_count": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "number"
+        }
+      },
+      "requires_auth": true
     }
   ]
 }

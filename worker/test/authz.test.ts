@@ -320,6 +320,37 @@ describe('delivery runs belong to the campaign admin and the assigned walker', (
   });
 });
 
+describe('ShareHire bookings', () => {
+  const book = { walker_id: WALKER_1, date: 1_800_000_000_000, door_count: 100 };
+
+  beforeEach(() => {
+    db.prepare("UPDATE users SET walker_profile = '{\"ratePerDoor\":0.5}' WHERE id = ?").run(WALKER_1);
+    db.prepare('UPDATE campaigns SET member_ids = ? WHERE id = ?').run(JSON.stringify([CLIENT_1, CLIENT_2]), campaignId);
+  });
+
+  it('only a campaign admin books, and the price comes from the walker rate and member count', async () => {
+    expect((await req(CLIENT_2, 'POST', `/v1/campaigns/${campaignId}/bookings`, book)).status).toBe(403);
+    expect((await direct(CLIENT_2, 'create_booking', { id: 'b0', campaign_id: campaignId, walker_id: WALKER_1, date: book.date, door_count: 100, created_at: 1 })).meta.changes).toBe(0);
+    expect((await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/bookings`, { ...book, door_count: 0 })).status).toBe(400);
+    expect((await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/bookings`, { ...book, walker_id: CLIENT_2 })).status).toBe(400);
+    expect((await req(CLIENT_1, 'POST', '/v1/campaigns/nope/bookings', book)).status).toBe(404);
+
+    expect((await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/bookings`, book)).status).toBe(201);
+    expect(row('SELECT * FROM bookings')).toMatchObject({
+      campaign_id: campaignId, walker_id: WALKER_1, client_id: CLIENT_1, door_count: 100,
+      rate_per_door: 0.5, total_price: 50, price_per_member: 25, member_count: 2, status: 'pending',
+    });
+  });
+
+  it('are listed to the campaign admin and the booked walker only', async () => {
+    await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/bookings`, book);
+    expect((await req(CLIENT_1, 'GET', `/v1/campaigns/${campaignId}/bookings`)).body).toHaveLength(1);
+    expect((await req(WALKER_1, 'GET', `/v1/campaigns/${campaignId}/bookings`)).body).toHaveLength(1);
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns/${campaignId}/bookings`)).body).toEqual([]);
+    expect((await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}/bookings`)).body).toEqual([]);
+  });
+});
+
 describe('the app worker module', () => {
   it('serves an http envelope through defineAppWorker with actions run as the caller', async () => {
     const pas = fakePas(db, CLIENT_1);

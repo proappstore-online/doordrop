@@ -11,3 +11,4 @@ export { type HistoryRecordData, type HistoryRecordStatus } from "./historyRecor
 export { type NotificationData, type NotificationType } from "./notification";
 export { type PlatformConfig } from "./platformConfig";
 export { type ChatReadState } from "./chatReadState";
+export { type BookingData } from "./booking";
