@@ -371,3 +371,30 @@ describe('the app worker module', () => {
     expect(campaigns.map((c) => c.id)).toEqual([campaignId]);
   });
 });
+
+describe('admin area', () => {
+  it('stats, all-doors and campaign status are app-admin only, through the worker and the actions', async () => {
+    for (const user of [CLIENT_1, WALKER_1]) {
+      expect((await req(user, 'GET', '/v1/admin/stats')).status).toBe(403);
+      expect((await req(user, 'GET', '/v1/admin/doors')).status).toBe(403);
+      expect((await req(user, 'POST', `/v1/admin/campaigns/${campaignId}/status`, { status: 'archive' })).status).toBe(403);
+      expect((await direct(user, 'admin_stats')).rows).toHaveLength(0);
+      expect((await direct(user, 'admin_list_doors')).rows).toHaveLength(0);
+      expect((await direct(user, 'admin_set_campaign_status', { id: campaignId, status: 'archive' })).meta.changes).toBe(0);
+    }
+    expect(row('SELECT status FROM campaigns WHERE id = ?', campaignId).status).toBe('assigned');
+
+    expect((await req(ADMIN, 'GET', '/v1/admin/stats')).body).toEqual({ users: 5, walkers: 2, campaigns: 1 });
+    const doors = (await req(ADMIN, 'GET', '/v1/admin/doors')).body;
+    expect(doors).toHaveLength(1);
+    expect(doors[0]).toMatchObject({ address: '1 Elm St', campaign_name: 'Elm St drop', history: [] });
+
+    expect((await req(ADMIN, 'POST', `/v1/admin/campaigns/${campaignId}/status`, {})).status).toBe(400);
+    expect((await req(ADMIN, 'POST', `/v1/admin/campaigns/${campaignId}/status`, { status: 'bogus' })).status).toBe(400);
+    expect((await direct(ADMIN, 'admin_set_campaign_status', { id: campaignId, status: 'bogus' })).meta.changes).toBe(0);
+    expect((await req(ADMIN, 'POST', '/v1/admin/campaigns/nope/status', { status: 'review' })).status).toBe(404);
+    expect((await req(ADMIN, 'POST', `/v1/admin/campaigns/${campaignId}/status`, { status: 'complete', job_status: 'completed' })).status).toBe(200);
+    expect(row('SELECT status, job_status FROM campaigns WHERE id = ?', campaignId)).toEqual({ status: 'complete', job_status: 'completed' });
+    expect(row('SELECT completed_at FROM campaigns WHERE id = ?', campaignId).completed_at).toBeGreaterThan(0);
+  });
+});

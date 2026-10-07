@@ -6,6 +6,12 @@ import MainLayout from './components/layout/MainLayout';
 import PrivateRoute from './routes/PrivateRoute';
 import ClientDashboard from './pages/client/ClientDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminUsersPage from './pages/admin/AdminUsersPage';
+import AdminUserDetailPage from './pages/admin/AdminUserDetailPage';
+import AdminCampaignsPage from './pages/admin/AdminCampaignsPage';
+import AdminCampaignDetailPage from './pages/admin/AdminCampaignDetailPage';
+import AdminAddressesPage from './pages/admin/AdminAddressesPage';
 
 // Client pages
 import ClientCampaignDetailPage from './pages/Campaign/ClientCampaignDetailPage';
@@ -102,7 +108,17 @@ const router = createBrowserRouter([
       {
         element: <MainLayout />,
         children: [
-          { path: '/admin', element: <AdminDashboard /> },
+          {
+            element: <AdminLayout />,
+            children: [
+              { path: '/admin', element: <AdminDashboard /> },
+              { path: '/admin/users', element: <AdminUsersPage /> },
+              { path: '/admin/users/:userId', element: <AdminUserDetailPage /> },
+              { path: '/admin/campaigns', element: <AdminCampaignsPage /> },
+              { path: '/admin/campaigns/:campaignId', element: <AdminCampaignDetailPage /> },
+              { path: '/admin/addresses', element: <AdminAddressesPage /> },
+            ],
+          },
         ],
       },
     ],

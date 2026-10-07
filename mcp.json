@@ -1343,6 +1343,40 @@
         }
       },
       "requires_auth": true
+    },
+    {
+      "name": "admin_stats",
+      "description": "Admin: platform-wide user, walker and campaign counts",
+      "operation": "query",
+      "sql": "SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM users WHERE role = 'walker') AS walkers, (SELECT COUNT(*) FROM campaigns) AS campaigns WHERE EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "requires_auth": true
+    },
+    {
+      "name": "admin_list_doors",
+      "description": "Admin: every door across all campaigns with its campaign name and suburb, most recently visited first",
+      "operation": "query",
+      "sql": "SELECT d.id, d.campaign_id, d.address, d.street_name, d.house_number, d.status, d.delivered_at, d.delivery_count, d.history, c.name AS campaign_name, c.suburb AS suburb FROM doors d JOIN campaigns c ON c.id = d.campaign_id WHERE EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') ORDER BY d.delivered_at DESC LIMIT 5000",
+      "requires_auth": true
+    },
+    {
+      "name": "admin_set_campaign_status",
+      "description": "Admin: set a campaign's status and/or job status on any campaign",
+      "operation": "execute",
+      "sql": "UPDATE campaigns SET status = COALESCE(:status, status), job_status = COALESCE(:job_status, job_status), completed_at = CASE WHEN :status = 'complete' THEN :__now ELSE completed_at END, archived_at = CASE WHEN :status = 'archive' THEN :__now ELSE archived_at END, updated_at = :__now WHERE id = :id AND (:status IS NULL OR :status IN ('draft', 'ready', 'assigned', 'complete', 'review', 'payment', 'archive')) AND (:job_status IS NULL OR :job_status IN ('draft', 'posted', 'assigned', 'in_progress', 'completed')) AND EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')",
+      "params": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "optional": true
+        },
+        "job_status": {
+          "type": "string",
+          "optional": true
+        }
+      },
+      "requires_auth": true
     }
   ]
 }
