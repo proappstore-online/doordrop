@@ -12,6 +12,14 @@ interface ChecklistItem {
 }
 
 const ReviewStep: React.FC<ReviewStepProps> = ({ data }) => {
+  // Estimate door count for validation
+  const AVERAGE_DOORS_PER_KM2 = 650;
+  const estimateDoorCount = (radiusKm: number): number => {
+    return Math.round(Math.PI * radiusKm * radiusKm * AVERAGE_DOORS_PER_KM2);
+  };
+  const radiusKm = data.doorRadiusM ? data.doorRadiusM / 1000 : 0;
+  const estimatedDoors = radiusKm > 0 ? estimateDoorCount(radiusKm) : 0;
+
   const checklist: ChecklistItem[] = [
     {
       label: "Location",
@@ -20,8 +28,8 @@ const ReviewStep: React.FC<ReviewStepProps> = ({ data }) => {
     },
     {
       label: "Delivery radius",
-      value: data.doorRadiusM ? `${Math.round(data.doorRadiusM / 1000)} km` : undefined,
-      isValid: Boolean(data.doorRadiusM && data.doorRadiusM > 0),
+      value: data.doorRadiusM ? `${Math.round(data.doorRadiusM / 1000)} km (~${estimatedDoors.toLocaleString()} properties)` : undefined,
+      isValid: Boolean(data.doorRadiusM && data.doorRadiusM > 0 && estimatedDoors > 0),
     },
     {
       label: "Flyer",

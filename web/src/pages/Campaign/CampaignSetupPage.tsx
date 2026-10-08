@@ -87,7 +87,7 @@ const CampaignSetupPage: React.FC = () => {
         const displaySuburb = (campaignData.suburb || "").trim().toLowerCase();
         const displayPostcode = (campaignData.postcode || "").trim();
 
-        // Geocode to get coordinates (simplified - using placeholder coords)
+        // Use geocoded coordinates from LocationStep
         const name = `${displaySuburb} ${displayPostcode}`;
         const nameKey = `${displaySuburb} ${displayPostcode.toLowerCase()}`;
 
@@ -103,8 +103,8 @@ const CampaignSetupPage: React.FC = () => {
           createdAt: new Date(),
           memberIds: [currentUser.id],
           status: "draft",
-          lat: 0,
-          lng: 0,
+          lat: campaignData.lat || 0,
+          lng: campaignData.lng || 0,
         });
 
         setCampaignId(newCampaignId);
@@ -195,8 +195,19 @@ const CampaignSetupPage: React.FC = () => {
       <StepIndicator steps={STEPS} currentStep={currentStepIndex + 1} />
 
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-          <p className="text-sm">{error}</p>
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/20">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            {currentStep.id === "location" && isCreating === false && (
+              <button
+                type="button"
+                onClick={handleNext}
+                className="flex-shrink-0 px-3 py-1 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              >
+                Retry
+              </button>
+            )}
+          </div>
         </div>
       )}
 

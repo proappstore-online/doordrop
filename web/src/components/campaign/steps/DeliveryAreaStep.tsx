@@ -13,6 +13,13 @@ const DeliveryAreaStep: React.FC<DeliveryAreaStepProps> = ({ data, onChange, isL
   // doorRadiusM is stored in meters; convert to km for display
   const radiusKm = data.doorRadiusM ? Math.round(data.doorRadiusM / 1000) : "";
 
+  // Estimate door count: π * r² * average density (650 doors/km² for Australian suburbs)
+  const AVERAGE_DOORS_PER_KM2 = 650;
+  const estimateDoorCount = (radiusKm: number): number => {
+    return Math.round(Math.PI * radiusKm * radiusKm * AVERAGE_DOORS_PER_KM2);
+  };
+  const estimatedDoors = radiusKm ? estimateDoorCount(Number(radiusKm)) : 0;
+
   const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setError(null);
@@ -84,8 +91,16 @@ const DeliveryAreaStep: React.FC<DeliveryAreaStepProps> = ({ data, onChange, isL
       </div>
 
       {isValid && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
-          ✓ Delivery area set to {radiusKm} km
+        <div className="space-y-3">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
+            ✓ Delivery area set to {radiusKm} km
+          </div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200">
+            <p className="font-medium">Estimated delivery scope</p>
+            <p className="mt-1">
+              Approximately <strong>{estimatedDoors.toLocaleString()}</strong> properties in your delivery area (based on Australian suburban density)
+            </p>
+          </div>
         </div>
       )}
     </fieldset>

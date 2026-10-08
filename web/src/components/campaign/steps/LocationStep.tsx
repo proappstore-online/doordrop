@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Select from "react-select";
 import { AU_STATE_CITY_MAP } from "../../../data/countryData";
 import type { CampaignData } from "../../../models/campaign";
@@ -14,6 +14,7 @@ const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading =
   const [suburbError, setSuburbError] = useState<string | null>(null);
   const [postcodeError, setPostcodeError] = useState<string | null>(null);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   const isDark = document.documentElement.classList.contains("dark");
 
@@ -36,6 +37,75 @@ const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading =
     if (!/^\d{4}$/.test(val)) return "Postcode must be a 4-digit number";
     return null;
   };
+
+  const geocodeLocation = useCallback(
+    async (suburb: string, postcode: string, state: string, maxRetries = 3) => {
+      setIsGeocoding(true);
+      setGeocodeError(null);
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const query = `${suburb}, ${postcode}, ${state}, Australia`;
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?` +
+              new URLSearchParams({
+                q: query,
+                format: "json",
+                limit: "1",
+                addressdetails: "1",
+              })
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const results = await response.json();
+          if (results.length === 0) {
+            throw new Error("Location not found");
+          }
+
+          const result = results[0];
+          onChange({
+            ...data,
+            lat: parseFloat(result.lat),
+            lng: parseFloat(result.lon),
+          });
+          setIsGeocoding(false);
+          return;
+        } catch (err) {
+          if (attempt === maxRetries - 1) {
+            // Last attempt failed
+            setGeocodeError(
+              "Could not verify location coordinates. You can still continue, but precise door matching may be affected."
+            );
+            onChange({ ...data, lat: undefined, lng: undefined });
+          } else {
+            // Wait before retrying with exponential backoff
+            await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          }
+        }
+      }
+      setIsGeocoding(false);
+    },
+    [data, onChange]
+  );
+
+  // Auto-geocode when location is valid
+  useEffect(() => {
+    if (
+      !isGeocoding &&
+      !isLoading &&
+      data.state &&
+      data.suburb &&
+      data.postcode &&
+      !stateError &&
+      !suburbError &&
+      !postcodeError
+    ) {
+      void geocodeLocation(data.suburb, data.postcode, data.state);
+    }
+  }, [data.state, data.suburb, data.postcode, stateError, suburbError, postcodeError, isGeocoding, isLoading, geocodeLocation]);
 
   const handleStateChange = (option: { value: string; label: string } | null) => {
     const nextState = option?.value || "";
@@ -162,15 +232,22 @@ const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading =
         )}
       </div>
 
-      {geocodeError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-          {geocodeError}
+      {isGeocoding && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-200 flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-blue-400 border-t-blue-800 rounded-full animate-spin" />
+          Verifying location coordinates...
         </div>
       )}
 
-      {isValid && (
+      {geocodeError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+          ⚠️ {geocodeError}
+        </div>
+      )}
+
+      {isValid && !isGeocoding && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
-          ✓ Location validated successfully
+          ✓ Location validated successfully {data.lat && data.lng ? `(${data.lat.toFixed(4)}, ${data.lng.toFixed(4)})` : ""}
         </div>
       )}
     </fieldset>
