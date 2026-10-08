@@ -1,10 +1,13 @@
 import { useProAuth } from '@proappstore/sdk/hooks';
+import type { AuthProvider } from '@proappstore/sdk';
 import { pas } from '../services/pas';
 
 // Compat wrapper preserving the original DoorDrop hook surface
 // (`currentUser`, `loading`) over the PAS SDK's `useProAuth`.
 export function useAuthContext() {
-  const { user, loading, signIn, signOut, deleteAccount } = useProAuth(pas);
+  const { user, loading, signOut, deleteAccount } = useProAuth(pas);
+  // The SDK hook's signIn() takes no args; call auth.signIn(provider) directly.
+  const signIn = (provider?: AuthProvider) => pas.auth.signIn(provider);
   return {
     logout: signOut,
     currentUser: user,
