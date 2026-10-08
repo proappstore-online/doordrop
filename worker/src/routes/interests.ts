@@ -28,6 +28,13 @@ router.get('/interests', async (c) => {
 });
 
 router.post('/interests', async (c) => {
+  const me = await whoami(c);
+
+  // Only walkers can express interest
+  if (me.role !== 'walker') {
+    throw new HTTPException(403, { message: 'walker role required' });
+  }
+
   const body = await c.req.json<{ campaignId?: string }>();
   if (typeof body.campaignId !== 'string' || body.campaignId.length === 0) {
     throw new HTTPException(400, { message: 'campaignId required' });

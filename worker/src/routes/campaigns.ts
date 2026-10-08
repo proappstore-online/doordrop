@@ -127,13 +127,21 @@ router.patch('/campaigns/:id', async (c) => {
   if (updates.admin_ids !== undefined && !Array.isArray(updates.admin_ids)) {
     throw new HTTPException(400, { message: 'admin_ids must be array' });
   }
+
+  // Validate assigned_walker_id is a walker (if provided)
+  const newWalkerId = body.assigned_walker_id as string | undefined;
+  if (newWalkerId) {
+    const walker = await first(c, 'get_user', { id: newWalkerId });
+    if (!walker) throw new HTTPException(400, { message: 'walker not found' });
+    if ((walker as any).role !== 'walker') throw new HTTPException(400, { message: 'assigned_walker_id must be a walker' });
+  }
+
   if (Object.keys(updates).length === 0) return c.json({ ok: true, changed: 0 });
 
   const calls: { name: string; params: Params }[] = [
     { name: 'update_campaign', params: { id: campaignId, patch: JSON.stringify(updates) } },
   ];
   // Notification trigger: assigned_walker_id changed to a non-null new value. Same transaction.
-  const newWalkerId = body.assigned_walker_id as string | undefined;
   if (newWalkerId && newWalkerId !== current.assigned_walker_id) {
     calls.push({ name: 'notify_walker_assigned', params: { campaign_id: campaignId, walker_id: newWalkerId } });
   }

@@ -472,6 +472,47 @@ describe('action-level authorization', () => {
   });
 });
 
+describe('walker role enforcement', () => {
+  it('only walkers can create interests', async () => {
+    // Clients cannot create interests
+    expect((await req(CLIENT_1, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
+    expect((await req(CLIENT_2, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
+
+    // Admins cannot create interests
+    expect((await req(ADMIN, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
+
+    // Walkers can create interests
+    expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId })).status).toBe(201);
+
+    // Direct action calls also reject non-walkers
+    expect((await direct(CLIENT_1, 'create_interest', { id: 'i1', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(0);
+    expect((await direct(ADMIN, 'create_interest', { id: 'i2', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(0);
+    expect((await direct(WALKER_1, 'create_interest', { id: 'i3', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(1);
+  });
+
+  it('only walkers can be assigned to a campaign', async () => {
+    // CLIENT_1 (campaign admin) tries to assign a client as walker
+    const assignClientRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: CLIENT_2 });
+    expect(assignClientRes.status).toBe(400);
+
+    // Tries to assign admin as walker
+    const assignAdminRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: ADMIN });
+    expect(assignAdminRes.status).toBe(400);
+
+    // Assigning a walker succeeds
+    const assignWalkerRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_2 });
+    expect(assignWalkerRes.status).toBe(200);
+
+    // Verify direct action also rejects non-walker assignment
+    const directAssignClient = await direct(CLIENT_1, 'update_campaign', { id: campaignId, patch: JSON.stringify({ assigned_walker_id: CLIENT_2 }) });
+    expect(directAssignClient.meta.changes).toBe(0);
+
+    // Direct action allows walker assignment
+    const directAssignWalker = await direct(CLIENT_1, 'update_campaign', { id: campaignId, patch: JSON.stringify({ assigned_walker_id: WALKER_1 }) });
+    expect(directAssignWalker.meta.changes).toBe(1);
+  });
+});
+
 describe('admin area', () => {
   it('stats, all-doors and campaign status are app-admin only, through the worker and the actions', async () => {
     for (const user of [CLIENT_1, WALKER_1]) {
