@@ -6,11 +6,10 @@ import { useAuthContext } from "../../hooks/useAuthContext";
 import { useUserData } from "../../hooks/useUserData";
 import { UserRepository } from "../../repositories/userRepository";
 import type { CampaignData, CampaignStatus, TrackPoint, TrackStop } from "../../models/campaign";
-import { isCampaignClosed } from "../../models/campaign";
+import { isCampaignClosed, getNextActions, type ActorRole } from "../../models/campaign";
 import type { DoorData, DeliveryEvent } from "../../models/door";
 import CampaignMap from "../../components/campaign/CampaignMap";
 import DoorReportModal from "../../components/campaign/DoorReportModal";
-import CampaignTabs from "../../components/campaign/CampaignTabs";
 import CampaignDetailsEditor from "../../components/campaign/CampaignDetailsEditor";
 import PrintoutManager from "../../components/campaign/PrintoutManager";
 import WalkerInterestPanel from "../../components/campaign/WalkerInterestPanel";
@@ -19,10 +18,10 @@ import CampaignStats from "../../components/campaign/CampaignStats";
 import AssignedWalkerCard from "../../components/campaign/AssignedWalkerCard";
 import DoorList from "../../components/campaign/DoorList";
 import AddressSelectionPanel from "../../components/campaign/AddressSelectionPanel";
-import StatusControlsBar from "../../components/campaign/StatusControlsBar";
-import PrintoutSelector from "../../components/campaign/PrintoutSelector";
-import CampaignNotices from "../../components/campaign/CampaignNotices";
 import PublishReadinessModal from "../../components/campaign/PublishReadinessModal";
+import CampaignCommandHeader from "../../components/campaign/CampaignCommandHeader";
+import CampaignExceptionBanner from "../../components/campaign/CampaignExceptionBanner";
+import CampaignFlyerPanel from "../../components/campaign/CampaignFlyerPanel";
 import ReviewForm from "../../components/reviews/ReviewForm";
 import ReviewPrompt from "../../components/reviews/ReviewPrompt";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
@@ -71,7 +70,6 @@ const ClientCampaignDetailPage: React.FC = () => {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [printoutError, setPrintoutError] = useState<string | null>(null);
 
   const [editBudget, setEditBudget] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
@@ -84,6 +82,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const [isPublishing, setIsPublishing] = useState(false);
 
   const [expandedDoorId, setExpandedDoorId] = useState<string | null>(null);
+  const [dismissedExceptions, setDismissedExceptions] = useState<Set<string>>(new Set());
 
   const activePrintoutId = campaign?.activePrintoutId || "";
 
@@ -99,7 +98,6 @@ const ClientCampaignDetailPage: React.FC = () => {
   const [polledTrackPoints, setPolledTrackPoints] = useState<TrackPoint[]>([]);
   const [polledTrackStops, setPolledTrackStops] = useState<TrackStop[]>([]);
 
-  const isWalker = userData?.role === "walker";
   const isAdmin = campaign?.adminIds?.includes(currentUser?.id || "") || false;
   const isAssignedWalker = campaign?.assignedWalkerId === currentUser?.id;
   const campaignClosed = campaign?.status ? isCampaignClosed(campaign.status) : false;
@@ -538,83 +536,306 @@ const ClientCampaignDetailPage: React.FC = () => {
   const reportedCount = doors.filter((d) => d.status === "reported").length;
   const activeDoorRadius = campaign.doorRadiusM ?? undefined;
 
-  const getStatusActions = (): { label: string; status: CampaignStatus; className: string }[] => {
-    if (!isAdmin) return [];
-    switch (campaign.status) {
-      case "draft":
-        return [];
-      case "ready":
-        return [{ label: "Back to Draft", status: "draft", className: "bg-gray-500 hover:bg-gray-600 text-white" }];
-      case "assigned":
-        return [{ label: "Mark Complete", status: "complete", className: "bg-indigo-600 hover:bg-indigo-700 text-white" }];
-      case "complete":
-        return [{ label: "Review", status: "review", className: "bg-yellow-500 hover:bg-yellow-600 text-white" }];
-      case "review":
-        return [{ label: "Payment", status: "payment", className: "bg-purple-600 hover:bg-purple-700 text-white" }];
-      case "payment":
-        return [{ label: "Archive", status: "archive", className: "bg-gray-600 hover:bg-gray-700 text-white" }];
-      default:
-        return [];
-    }
-  };
-
-  const statusActions = getStatusActions();
+  const nextActorRole: ActorRole = isAdmin ? (userData?.role === "admin" ? "platform_admin" : "campaign_admin") : "assigned_walker";
+  const availableActions = campaign?.status ? getNextActions(campaign.status as any, nextActorRole) : [];
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      {mutationError && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
-        >
-          <div className="flex gap-3">
-            <svg
-              className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <div className="flex-1">
-              <p>{mutationError}</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="max-w-7xl mx-auto p-4 space-y-6">
+        {/* Global error */}
+        {mutationError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
+          >
+            <div className="flex gap-3">
+              <svg
+                className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <div className="flex-1">
+                <p>{mutationError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMutationError(null)}
+                className="flex-shrink-0 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setMutationError(null)}
-              className="flex-shrink-0 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-            >
-              ✕
-            </button>
+          </div>
+        )}
+
+        {/* Command Header */}
+        <CampaignCommandHeader
+          campaign={campaign}
+          nextActions={availableActions}
+          onActionClick={handleStatusChange}
+          actionUpdating={statusUpdating}
+          isAdmin={isAdmin}
+        />
+
+        {/* Exception Banner */}
+        <CampaignExceptionBanner
+          campaign={campaign}
+          totalDoors={doors.length}
+          dismissedExceptions={dismissedExceptions}
+          onDismiss={(id) => setDismissedExceptions((prev) => new Set([...prev, id]))}
+        />
+
+        {/* Main Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Primary Content Area - Left/Center */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Active Campaign: Show Map */}
+            {campaign.status === "assigned" ? (
+              <CampaignMap
+                center={effectiveCenter}
+                doors={mapDoors}
+                doorRadiusM={activeDoorRadius}
+                trackPoints={displayTrackPoints}
+                trackStops={displayTrackStops}
+                walkerPosition={mapWalkerPosition}
+                isTracking={isTracking}
+                onDoorClick={handleDoorClick}
+              />
+            ) : campaign.status === "draft" || campaign.status === "ready" ? (
+              /* Draft/Ready: Show Details Editor */
+              isAdmin ? (
+                <CampaignDetailsEditor
+                  budget={editBudget}
+                  dueDate={editDueDate}
+                  doorRadius={editDoorRadius}
+                  junkMailPolicy={editJunkMailPolicy}
+                  propertyFilter={editPropertyFilter}
+                  doorCount={doors.length}
+                  saving={savingDetails}
+                  onBudgetChange={setEditBudget}
+                  onDueDateChange={setEditDueDate}
+                  onDoorRadiusChange={setEditDoorRadius}
+                  onJunkMailPolicyChange={setEditJunkMailPolicy}
+                  onPropertyFilterChange={setEditPropertyFilter}
+                  onSave={handleSaveDetails}
+                  onPublish={handlePublish}
+                  publishDisabled={
+                    statusUpdating ||
+                    isPublishing ||
+                    doors.length === 0 ||
+                    !campaign?.activePrintoutId ||
+                    !campaign?.doorRadiusM ||
+                    campaign.doorRadiusM <= 0 ||
+                    !campaign?.suburb ||
+                    !campaign?.postcode
+                  }
+                />
+              ) : null
+            ) : campaign.status === "complete" || campaign.status === "review" || campaign.status === "payment" ? (
+              /* Closed Campaigns: Show Stats */
+              <CampaignStats
+                campaign={campaign}
+                totalDoors={doors.length}
+                deliveredCount={deliveredCount}
+                reportedCount={reportedCount}
+              />
+            ) : null}
+
+            {/* Delivery Tracking Panel for Assigned Walker */}
+            {isAssignedWalker && !campaignClosed && (
+              <DeliveryTrackingPanel
+                trackingState={trackingState}
+                doorRadiusM={campaign.doorRadiusM || 100}
+                junkMailPolicy={campaign.junkMailPolicy}
+                propertyFilter={campaign.propertyFilter}
+                geoError={geoError}
+                walkerPosition={walkerPosition}
+                elapsedMinutes={elapsedMinutes}
+                distanceKm={distanceKm}
+                debugInfo={trackingDebugInfo}
+                isAdmin={isAdmin || false}
+                doors={doors}
+                campaignId={campaignId}
+                currentUserId={currentUser?.id}
+                onStartTracking={startTracking}
+                onStopTracking={handleStopTracking}
+                onDismissError={dismissError}
+                onDoorVisited={handleDoorVisited}
+              />
+            )}
+          </div>
+
+          {/* Secondary Content Area - Right Sidebar */}
+          <div className="space-y-6">
+            {/* Active Flyer Panel */}
+            {campaign.status !== "draft" && (
+              <CampaignFlyerPanel
+                campaign={campaign}
+                printouts={printouts}
+                onSelectFlyer={(id: string | undefined) => {
+                  if (!campaignId) return;
+                  CampaignRepository.updateGroup(campaignId, { activePrintoutId: id || undefined }).catch(
+                    (err) => console.error("Failed to update active flyer:", err)
+                  );
+                }}
+                isAdmin={isAdmin}
+              />
+            )}
+
+            {/* Assigned Walker Card */}
+            {campaign.assignedWalkerId && isAdmin && (
+              <AssignedWalkerCard
+                walkerName={
+                  interestedWalkers.find((w) => w.walker.id === campaign.assignedWalkerId)?.walker.name ||
+                  campaign.assignedWalkerId
+                }
+                onUnassign={walkerInterest.handleUnassignWalker}
+                unassigning={walkerInterest.assigningWalkerId === "unassign"}
+                isCampaignClosed={campaignClosed}
+              />
+            )}
+
+            {/* Walker Interest Panel for Non-Draft */}
+            {isAdmin && campaign.status !== "draft" && (
+              <WalkerInterestPanel
+                interestedWalkers={interestedWalkers}
+                assignedWalkerId={campaign.assignedWalkerId || null}
+                votingId={walkerInterest.votingId}
+                assigningWalkerId={walkerInterest.assigningWalkerId}
+                isCampaignClosed={campaignClosed}
+                assignmentError={walkerInterest.assignmentError}
+                onVote={walkerInterest.handleVote}
+                onAssign={walkerInterest.handleAssignWalker}
+                onDismissError={walkerInterest.dismissError}
+              />
+            )}
           </div>
         </div>
-      )}
 
-      <CampaignTabs
-        campaignId={campaignId!}
-        campaignName={campaign.name}
-        status={`${campaign.suburb} ${campaign.postcode}`}
-        campaignStatus={campaign.status}
-      />
+        {/* Address Selection & Door List (for draft/ready with admin) */}
+        {isAdmin && (campaign.status === "draft" || campaign.status === "ready") && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <CampaignMap
+                center={effectiveCenter}
+                doors={mapDoors}
+                doorRadiusM={activeDoorRadius}
+                trackPoints={displayTrackPoints}
+                trackStops={displayTrackStops}
+                walkerPosition={mapWalkerPosition}
+                isTracking={isTracking}
+                onDoorClick={handleDoorClick}
+              />
+            </div>
+            <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
+              <AddressSelectionPanel
+                suburb={campaign.suburb || ""}
+                postcode={campaign.postcode || ""}
+                state={campaign.state || ""}
+                currentStreet={doorManagement.currentStreet}
+                availableAddresses={doorManagement.availableAddresses}
+                selectedDoorKeys={doorManagement.selectedDoorKeys}
+                overpassLoading={doorManagement.overpassLoading}
+                overpassError={doorManagement.overpassError}
+                manualOpen={doorManagement.manualOpen}
+                onStreetSelected={doorManagement.handleStreetSelected}
+                onToggleAddress={doorManagement.toggleAddress}
+                onToggleManual={() => doorManagement.setManualOpen(!doorManagement.manualOpen)}
+                onDoorsGenerated={doorManagement.handleDoorsGenerated}
+              />
+              <DoorList
+                campaignId={campaignId!}
+                doorsByStreet={doorsByStreet}
+                expandedStreets={expandedStreets}
+                expandedDoorId={expandedDoorId}
+                printouts={printouts}
+                canEditDoors={canEditDoors}
+                onToggleStreet={toggleStreet}
+                onToggleDoor={setExpandedDoorId}
+                onDoorClick={handleDoorClick}
+                onDoorReport={handleDoorReport}
+              />
+            </div>
+          </div>
+        )}
 
-      <StatusControlsBar
-        statusActions={statusActions}
-        statusUpdating={statusUpdating}
-        onStatusChange={handleStatusChange}
-      />
+        {/* Printout Manager */}
+        {isAdmin && (
+          <PrintoutManager
+            printouts={printouts}
+            showForm={printoutManagement.showPrintoutForm}
+            printoutName={printoutManagement.printoutName}
+            printoutDesc={printoutManagement.printoutDesc}
+            printoutFile={printoutManagement.printoutFile}
+            printoutFilePreview={printoutManagement.printoutFilePreview}
+            flyers={printoutManagement.flyers}
+            flyersLoading={printoutManagement.flyersLoading}
+            selectedFlyerId={printoutManagement.selectedFlyerId}
+            saving={printoutManagement.savingPrintout}
+            isCampaignClosed={campaignClosed}
+            error={printoutManagement.printoutError}
+            onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
+            onNameChange={printoutManagement.setPrintoutName}
+            onDescChange={printoutManagement.setPrintoutDesc}
+            onFileChange={(file, preview) => {
+              printoutManagement.setPrintoutFile(file);
+              printoutManagement.setPrintoutFilePreview(preview);
+            }}
+            onFlyerSelect={printoutManagement.selectFlyer}
+            onSubmit={printoutManagement.handleCreatePrintout}
+            onCancel={() => printoutManagement.setShowPrintoutForm(false)}
+            onDismissError={printoutManagement.dismissError}
+          />
+        )}
 
-      <CampaignNotices
-        campaignStatus={campaign.status}
-        isCampaignClosed={campaignClosed}
-        isWalker={isWalker}
-        isAssignedWalker={isAssignedWalker}
-        isAdmin={isAdmin}
-        campaignData={campaign}
-        totalDoors={doors.length}
-      />
+        {/* Review Form/Prompt */}
+        {isAdmin &&
+          reviewCheckDone &&
+          (campaign.status === "complete" || campaign.status === "review") &&
+          campaign.assignedWalkerId &&
+          !hasReviewed &&
+          (showReviewForm ? (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+              <ReviewForm
+                walkerId={campaign.assignedWalkerId}
+                reviewerId={currentUser?.id || ""}
+                reviewerName={userData?.name}
+                campaignId={campaignId!}
+                scheduleId={campaignId}
+                onSubmitted={() => {
+                  setShowReviewForm(false);
+                  setHasReviewed(true);
+                }}
+                onCancel={() => setShowReviewForm(false)}
+              />
+            </div>
+          ) : (
+            <ReviewPrompt
+              onRateNow={() => setShowReviewForm(true)}
+              completedDate={campaign.completedAt ? new Date(campaign.completedAt).toLocaleDateString() : undefined}
+              walkerName={assignedWalkerName}
+            />
+          ))}
+
+        {/* Notes Section */}
+        {(isAdmin || isAssignedWalker) && (
+          <Notes
+            notes={notes}
+            noteInput={noteInput}
+            noteLoading={noteLoading}
+            onNoteChange={setNoteInput}
+            onAddNote={handleAddNote}
+            formatDate={(date) => new Date(date).toLocaleString()}
+          />
+        )}
+
+        {/* Publish Modal */}
 
       {isAssignedWalker && !campaignClosed && (
         <DeliveryTrackingPanel
@@ -734,27 +955,6 @@ const ClientCampaignDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Flyer selector */}
-          {printouts.length > 0 && (
-            <PrintoutSelector
-              printouts={printouts}
-              selectedPrintoutId={activePrintoutId}
-              onSelectPrintout={async (id) => {
-                if (!campaignId) return;
-                setPrintoutError(null);
-                try {
-                  await CampaignRepository.updateGroup(campaignId, { activePrintoutId: id || undefined });
-                  setCampaign((prev) => (prev ? { ...prev, activePrintoutId: id || undefined } : prev));
-                } catch (err) {
-                  console.error("Failed to update active flyer:", err);
-                  setPrintoutError("We couldn't update the active flyer. Your selection has been kept—please try again.");
-                }
-              }}
-              locked={campaign.status !== "draft"}
-              error={printoutError}
-              onDismissError={() => setPrintoutError(null)}
-            />
-          )}
         </>
       )}
 
@@ -832,115 +1032,30 @@ const ClientCampaignDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {reportingDoor && campaignId && currentUser && reportingDoor.propertyId && (
-        <DoorReportModal
-          campaignId={campaignId}
-          door={reportingDoor}
-          propertyId={reportingDoor.propertyId}
-          reportedBy={currentUser.id}
-          onClose={() => setReportingDoor(null)}
-          onReported={handleDoorReported}
-        />
-      )}
-
-      {isAdmin && (
-        <PrintoutManager
-          printouts={printouts}
-          showForm={printoutManagement.showPrintoutForm}
-          printoutName={printoutManagement.printoutName}
-          printoutDesc={printoutManagement.printoutDesc}
-          printoutFile={printoutManagement.printoutFile}
-          printoutFilePreview={printoutManagement.printoutFilePreview}
-          flyers={printoutManagement.flyers}
-          flyersLoading={printoutManagement.flyersLoading}
-          selectedFlyerId={printoutManagement.selectedFlyerId}
-          saving={printoutManagement.savingPrintout}
-          isCampaignClosed={campaignClosed}
-          error={printoutManagement.printoutError}
-          onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
-          onNameChange={printoutManagement.setPrintoutName}
-          onDescChange={printoutManagement.setPrintoutDesc}
-          onFileChange={(file, preview) => {
-            printoutManagement.setPrintoutFile(file);
-            printoutManagement.setPrintoutFilePreview(preview);
-          }}
-          onFlyerSelect={printoutManagement.selectFlyer}
-          onSubmit={printoutManagement.handleCreatePrintout}
-          onCancel={() => printoutManagement.setShowPrintoutForm(false)}
-          onDismissError={printoutManagement.dismissError}
-        />
-      )}
-
-      {campaign.assignedWalkerId && isAdmin && (
-        <AssignedWalkerCard
-          walkerName={interestedWalkers.find((w) => w.walker.id === campaign.assignedWalkerId)?.walker.name || campaign.assignedWalkerId}
-          onUnassign={walkerInterest.handleUnassignWalker}
-          unassigning={walkerInterest.assigningWalkerId === "unassign"}
-          isCampaignClosed={campaignClosed}
-        />
-      )}
-
-      {isAdmin && campaign.status !== "draft" && (
-        <WalkerInterestPanel
-          interestedWalkers={interestedWalkers}
-          assignedWalkerId={campaign.assignedWalkerId || null}
-          votingId={walkerInterest.votingId}
-          assigningWalkerId={walkerInterest.assigningWalkerId}
-          isCampaignClosed={campaignClosed}
-          assignmentError={walkerInterest.assignmentError}
-          onVote={walkerInterest.handleVote}
-          onAssign={walkerInterest.handleAssignWalker}
-          onDismissError={walkerInterest.dismissError}
-        />
-      )}
-
-      {isAdmin && reviewCheckDone && (campaign.status === "complete" || campaign.status === "review") && campaign.assignedWalkerId && !hasReviewed && (
-        showReviewForm ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-            <ReviewForm
-              walkerId={campaign.assignedWalkerId}
-              reviewerId={currentUser?.id || ""}
-              reviewerName={userData?.name}
-              campaignId={campaignId!}
-              scheduleId={campaignId}
-              onSubmitted={() => {
-                setShowReviewForm(false);
-                setHasReviewed(true);
-              }}
-              onCancel={() => setShowReviewForm(false)}
-            />
-          </div>
-        ) : (
-          <ReviewPrompt
-            onRateNow={() => setShowReviewForm(true)}
-            completedDate={campaign.completedAt ? new Date(campaign.completedAt).toLocaleDateString() : undefined}
-            walkerName={assignedWalkerName}
+        {/* Door Report Modal */}
+        {reportingDoor && campaignId && currentUser && reportingDoor.propertyId && (
+          <DoorReportModal
+            campaignId={campaignId}
+            door={reportingDoor}
+            propertyId={reportingDoor.propertyId}
+            reportedBy={currentUser.id}
+            onClose={() => setReportingDoor(null)}
+            onReported={handleDoorReported}
           />
-        )
-      )}
+        )}
 
-      {(isAdmin || isAssignedWalker) && (
-        <Notes
-          notes={notes}
-          noteInput={noteInput}
-          noteLoading={noteLoading}
-          onNoteChange={setNoteInput}
-          onAddNote={handleAddNote}
-          formatDate={(date) => new Date(date).toLocaleString()}
+        {/* Publish Readiness Modal */}
+        <PublishReadinessModal
+          isOpen={showPublishModal}
+          isPublishing={isPublishing}
+          campaignData={campaign}
+          totalDoors={doors.length}
+          doorRadiusKm={campaign?.doorRadiusM ? Math.round(campaign.doorRadiusM / 1000) : 0}
+          onPublish={handleConfirmPublish}
+          onSaveDraft={handleSaveDraft}
+          onClose={() => setShowPublishModal(false)}
         />
-      )}
-
-      {/* Issue #47: Publish readiness modal */}
-      <PublishReadinessModal
-        isOpen={showPublishModal}
-        isPublishing={isPublishing}
-        campaignData={campaign}
-        totalDoors={doors.length}
-        doorRadiusKm={campaign?.doorRadiusM ? Math.round(campaign.doorRadiusM / 1000) : 0}
-        onPublish={handleConfirmPublish}
-        onSaveDraft={handleSaveDraft}
-        onClose={() => setShowPublishModal(false)}
-      />
+      </div>
     </div>
   );
 };
