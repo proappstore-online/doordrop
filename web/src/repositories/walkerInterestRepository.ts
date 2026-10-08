@@ -1,14 +1,18 @@
-import type { WalkerInterest } from '../models/walkerInterest';
-import { apiGet, apiPost, ApiError } from '../lib/api';
-import { fromWire } from '../lib/transform';
+import type { WalkerInterest, WalkerInterestStatus } from '../models/walkerInterest';
+import { apiGet, apiPost, apiPatch, ApiError } from '../lib/api';
+import { fromWire, toWire } from '../lib/transform';
 
 type InterestWithId = WalkerInterest & { id: string };
 
 export const WalkerInterestRepository = {
   async createInterest(data: WalkerInterest): Promise<string> {
     // walker_id is taken from the auth bearer; campaignId is the input.
+    // Default status to 'pending' if not provided
     try {
-      const res = await apiPost<{ id: string }>('/v1/interests', { campaignId: data.campaignId });
+      const res = await apiPost<{ id: string }>('/v1/interests', {
+        campaignId: data.campaignId,
+        status: data.status || 'pending',
+      });
       return res.id;
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -18,6 +22,14 @@ export const WalkerInterestRepository = {
       }
       throw e;
     }
+  },
+
+  async withdrawInterest(interestId: string): Promise<void> {
+    await apiPatch(`/v1/interests/${interestId}`, toWire({ status: 'withdrawn' }));
+  },
+
+  async updateInterestStatus(interestId: string, status: WalkerInterestStatus): Promise<void> {
+    await apiPatch(`/v1/interests/${interestId}`, toWire({ status }));
   },
 
   async getInterestByWalkerAndGroup(
