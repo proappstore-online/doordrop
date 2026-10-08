@@ -2,14 +2,13 @@
 
 A two-sided flyer-delivery marketplace on **[ProAppStore](https://proappstore.online)**. Clients post campaigns targeting specific suburbs + streets; walkers browse open campaigns, get assigned, and deliver door-to-door with GPS-tracked auto-delivery (geofenced, walking-pace validated).
 
-Ported from the original Firebase-based DoorDrop ([`DoorDrop/platform`](https://github.com/DoorDrop/platform)). See [`doordrop-port-plan.md`](../doordrop-port-plan.md) for the architectural decisions and status of every porting task.
+Ported from the original Firebase-based DoorDrop ([`DoorDrop/platform`](https://github.com/DoorDrop/platform)). See the [closed GitHub issues](https://github.com/proappstore-online/doordrop/issues?q=is%3Aissue+is%3Aclosed) for the architectural decisions and status of each porting phase (#46 campaign setup wizard, #48 lifecycle state machine, #49 command center, #52 walker mobile UX, #18 client dashboard, #20 votes, #21 chat, #22 notifications).
 
 ## URLs
 
 - **Production**: <https://proappstore-doordrop.pages.dev>
-- **API**: `https://doordrop.proappstore.online/.pas/worker/v1/*` (app worker; not enabled yet — platform#264)
+- **API**: `https://doordrop.proappstore.online/.pas/worker/v1/*` (app worker, deployed on every push via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml); see ADR-009)
 - **GitHub**: <https://github.com/proappstore-online/doordrop>
-- _Custom domain `doordrop.proappstore.online` pending a platform fix in `fas/admin` — see port plan §17._
 
 ## What works end-to-end
 
@@ -51,7 +50,7 @@ pnpm --filter @doordrop/web test:e2e:ui   # Playwright interactive runner
 
 ## Status
 
-14 of 17 port-plan tasks complete. See `CLAUDE.md` for the architecture overview and `doordrop-port-plan.md` for the running task list and what's deferred (chat onto `fas.rooms`, in-app notifications, admin app, 7 stubbed pages, platform follow-ups).
+All major port-plan tasks complete as of October 2026 (see [closed issues](https://github.com/proappstore-online/doordrop/issues?q=is%3Aissue+is%3Aclosed) for details). Deferred work tracked separately: #10/#11 (chat onto `fas.rooms`), #21 (in-app notifications), #22 (admin features), #20 (votes), and platform follow-ups. See `CLAUDE.md` for the architecture overview.
 
 ## License
 

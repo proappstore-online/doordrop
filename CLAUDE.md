@@ -1,6 +1,6 @@
 # DoorDrop — agent guide
 
-A two-sided flyer-delivery marketplace ported from Firebase to PAS (ProAppStore). If you're picking this up cold, start here, then the running task list in `../doordrop-port-plan.md`.
+A two-sided flyer-delivery marketplace ported from Firebase to PAS (ProAppStore). If you're picking this up cold, start here. For the running task list and status of the port, see the [closed GitHub issues](https://github.com/proappstore-online/doordrop/issues?q=is%3Aissue+is%3Aclosed) tracking each phase (e.g., #46 campaign setup wizard, #48 lifecycle state machine, #49 command center, #52 walker mobile UX).
 
 ## Product shape
 
@@ -15,7 +15,7 @@ Each role has a separate route subtree (`/app`, `/walker`, `/admin`) gated by `P
 ```
    ┌─────────────────────┐  same-origin       ┌──────────────────────────┐
    │ web/  (React app)   │  /.pas/worker/v1/* │  worker/  (app worker)   │
-   │ - useProGate auth   │ ─────────────────▶ │  - Hono + /v1/* routes   │
+   │ - useProAuth        │ ─────────────────▶ │  - Hono + /v1/* routes   │
    │ - 14 repositories   │  session cookie    │  - cross-row checks      │
    │ - useDeliveryTrack  │                    │  - no DB binding         │
    │ - Leaflet maps      │                    └────────────┬─────────────┘
@@ -60,7 +60,7 @@ Replacing with `fas.rooms` (WebSocket Durable Objects) is task #10/#11 in the po
 
 ### Auth & identity
 
-- Sign-in: `useProGate` → `pas.auth.signIn()` → redirect to FAS hosted OAuth start → GitHub → callback hash → SDK persists to localStorage.
+- Sign-in: `useProAuth` → `pas.auth.signIn()` → redirect to FAS hosted OAuth start → GitHub → callback hash → SDK persists to localStorage.
 - The worker never sees a token: the platform verifies the session cookie on `/.pas/worker/*` and the worker's actions run as that user. `worker/src/auth.ts` only resolves the caller's standing (`whoami`, `campaign_access`).
 - `currentUser` from `useAuthContext()` is the FAS `User` shape: `{ id, login, avatarUrl, dateOfBirth }`. **Not** `{ uid, email, displayName }` — Firebase Auth's shape is gone.
 - The full `userData` (email, name, role, profile, etc.) lives in our D1 `users` table, fetched via `/v1/me`. Use `useUserData()` for it.
@@ -131,8 +131,8 @@ The workflow also applies `migrations.json` (before the frontend and `mcp.json`)
 - **`pas-data-doordrop` is the platform's generic data worker** — that is correct. Don't deploy anything under that name.
 - **`currentUser.uid/.email/.displayName` don't exist** — FAS User is `{ id, login, avatarUrl, dateOfBirth }`. There's a sed history of fixing these; if you see one, it's the bug.
 - **Bundle size is ~1048 KiB precache** (single chunk). Code-splitting the Campaign components would cut the initial download substantially. Hasn't mattered yet.
-- **No stubbed pages remain.** All former "Coming soon" pages, `DeliveryRunRepository` and the admin pages (`/admin/*`, linked from the top bar for admins) are ported.
-- **Remaining stub**: `WalkerInterestRepository.castVote/hasUserVoted/getVoteCount` (votes feature dropped, methods are no-ops so the UI doesn't crash).
+- **Client dashboard and core pages are now complete.** The client dashboard was a placeholder until [#18 (client dashboard)](https://github.com/proappstore-online/doordrop/issues/18). All admin pages (`/admin/*`, linked from the top bar for admins) are now ported and functional.
+- **Remaining stub**: `WalkerInterestRepository.castVote/hasUserVoted/getVoteCount` (votes feature dropped, methods are no-ops so the UI doesn't crash). See [#20 (votes)](https://github.com/proappstore-online/doordrop/issues/20).
 - **Admin lists are capped at 500 rows** (`LIMIT 500` in the `mcp.json` users/campaigns actions, no pagination). `ListCapNotice` in `web/src/pages/admin/adminUi.tsx` warns when the cap is hit.
 - **Terms / privacy** are static pages, `web/public/terms.html` and `privacy.html` (ported from the original website; styles/assets in `web/public/site/`). Link to them as `/terms.html` and `/privacy.html`. `web/public/privacy.md` is the platform-template copy, not linked.
 - **Date round-trip**: dates go out as `Date.getTime()` (epoch ms int) and come back as Date via `fromWire`. Don't bypass `toWire`/`fromWire` or you'll round-trip strings.
@@ -140,7 +140,7 @@ The workflow also applies `migrations.json` (before the frontend and `mcp.json`)
 
 ## Reference
 
-- Port plan + task list: [`../doordrop-port-plan.md`](../doordrop-port-plan.md)
-- PAS platform conventions: <https://proappstore.online/skills.md>
-- Original DoorDrop (Firebase): <https://github.com/DoorDrop/platform> (private)
-- Cloned locally at `~/dev/doordrop` for reference reads
+- **Port status & task tracking**: See closed GitHub issues (#46 campaign setup wizard, #48 lifecycle state machine, #49 command center, #52 walker mobile UX, #18 client dashboard, #20 votes, #21 chat, #22 notifications).
+- **Platform architecture**: [ADR-009 app workers](https://github.com/proappstore-online/platform/discussions) — the app worker model used by DoorDrop (see deploy.yml for how it's built and deployed).
+- **PAS platform conventions**: <https://proappstore.online/skills.md>
+- **Original DoorDrop (Firebase)**: <https://github.com/DoorDrop/platform> (private reference only)
