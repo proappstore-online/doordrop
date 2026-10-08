@@ -1416,6 +1416,244 @@ test.describe('Flyer library error handling', () => {
   });
 });
 
+// Campaign flyer selection: draft campaigns allow changing/clearing active flyer
+test.describe('Campaign active flyer management', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.addCookies([
+      {
+        name: '__Host-pas-session',
+        value: 'mock-session-token',
+        domain: 'localhost',
+        path: '/',
+        secure: false,
+        httpOnly: true,
+      },
+    ]);
+
+    // Mock auth as client
+    await page.route('**/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          user: { id: 'client-flyer-test', role: 'client', name: 'Test Client' },
+          needsRoleSelection: false,
+        }),
+      }),
+    );
+  });
+
+  test('select an active flyer in draft campaign', async ({ page }) => {
+    // Mock campaign with multiple printouts and no active flyer yet
+    const mockCampaign = {
+      id: 'campaign-flyer-1',
+      name: 'Test Campaign',
+      status: 'draft',
+      adminIds: ['client-flyer-test'],
+      activePrintoutId: undefined,
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    const mockPrintouts = [
+      { id: 'printout1', name: 'Summer Sale', description: 'Summer promotion flyer' },
+      { id: 'printout2', name: 'Grand Opening', description: 'New store opening flyer' },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-flyer-1', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        mockCampaign.activePrintoutId = body.active_printout_id;
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-flyer-1/printouts', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockPrintouts) }),
+    );
+
+    await page.goto('/app/campaign/campaign-flyer-1');
+
+    // Find and select a flyer
+    const flyerSelect = page.locator('select').first();
+    await flyerSelect.selectOption('printout1');
+
+    // Verify selection was updated
+    await expect(flyerSelect).toHaveValue('printout1');
+
+    // Clear button should now be visible
+    await expect(page.getByRole('button', { name: /Clear/i })).toBeVisible();
+  });
+
+  test('change the active flyer in draft campaign', async ({ page }) => {
+    // Mock campaign with an active flyer already selected
+    const mockCampaign = {
+      id: 'campaign-flyer-2',
+      name: 'Test Campaign',
+      status: 'draft',
+      adminIds: ['client-flyer-test'],
+      activePrintoutId: 'printout1',
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    const mockPrintouts = [
+      { id: 'printout1', name: 'Summer Sale' },
+      { id: 'printout2', name: 'Grand Opening' },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-flyer-2', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        mockCampaign.activePrintoutId = body.active_printout_id;
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-flyer-2/printouts', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockPrintouts) }),
+    );
+
+    await page.goto('/app/campaign/campaign-flyer-2');
+
+    // Should show selector (not locked) with option to change
+    const flyerSelect = page.locator('select').first();
+    await expect(flyerSelect).toBeVisible();
+    await expect(flyerSelect).toHaveValue('printout1');
+
+    // Change to different flyer
+    await flyerSelect.selectOption('printout2');
+
+    // Verify change was applied
+    await expect(flyerSelect).toHaveValue('printout2');
+  });
+
+  test('clear the active flyer in draft campaign', async ({ page }) => {
+    const mockCampaign = {
+      id: 'campaign-flyer-3',
+      name: 'Test Campaign',
+      status: 'draft',
+      adminIds: ['client-flyer-test'],
+      activePrintoutId: 'printout1',
+    };
+
+    const mockPrintouts = [
+      { id: 'printout1', name: 'Summer Sale' },
+      { id: 'printout2', name: 'Grand Opening' },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-flyer-3', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        mockCampaign.activePrintoutId = body.active_printout_id;
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-flyer-3/printouts', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockPrintouts) }),
+    );
+
+    await page.goto('/app/campaign/campaign-flyer-3');
+
+    // Clear button should be visible
+    const clearButton = page.getByRole('button', { name: /Clear/i });
+    await expect(clearButton).toBeVisible();
+
+    // Click clear
+    await clearButton.click();
+
+    // Flyer should be cleared
+    const flyerSelect = page.locator('select').first();
+    await expect(flyerSelect).toHaveValue('');
+  });
+
+  test('active flyer locked when campaign delivery has started', async ({ page }) => {
+    const mockCampaign = {
+      id: 'campaign-flyer-4',
+      name: 'Test Campaign',
+      status: 'assigned', // delivery started
+      adminIds: ['client-flyer-test'],
+      activePrintoutId: 'printout1',
+    };
+
+    const mockPrintouts = [
+      { id: 'printout1', name: 'Summer Sale' },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-flyer-4', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) }),
+    );
+
+    await page.route('**/v1/campaigns/campaign-flyer-4/printouts', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockPrintouts) }),
+    );
+
+    await page.goto('/app/campaign/campaign-flyer-4');
+
+    // Should show read-only text, not selector
+    await expect(page.locator('select').first()).not.toBeVisible();
+    await expect(page.getByText('Summer Sale')).toBeVisible();
+
+    // Clear button should not be visible
+    await expect(page.getByRole('button', { name: /Clear/i })).not.toBeVisible();
+  });
+
+  test('failed flyer update shows error and preserves selection', async ({ page }) => {
+    const mockCampaign = {
+      id: 'campaign-flyer-5',
+      name: 'Test Campaign',
+      status: 'draft',
+      adminIds: ['client-flyer-test'],
+      activePrintoutId: undefined,
+    };
+
+    const mockPrintouts = [
+      { id: 'printout1', name: 'Summer Sale' },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-flyer-5', (route) => {
+      if (route.request().method() === 'PATCH') {
+        // Simulate update failure
+        return route.fulfill({
+          status: 500,
+          body: '{"error":"server error"}',
+        });
+      }
+      return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+    });
+
+    await page.route('**/v1/campaigns/campaign-flyer-5/printouts', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(mockPrintouts) }),
+    );
+
+    await page.goto('/app/campaign/campaign-flyer-5');
+
+    // Try to select a flyer (will fail)
+    const flyerSelect = page.locator('select').first();
+    await flyerSelect.selectOption('printout1');
+
+    // Error should be shown
+    await expect(page.getByText(/couldn't update the active flyer/i)).toBeVisible();
+
+    // But the selection in the form should remain
+    await expect(flyerSelect).toHaveValue('printout1');
+  });
+});
+
 // Canary test: verifies that the E2E infrastructure catches test failures.
 // This test is designed to FAIL when run locally during development (skipped by default).
 // In CI, it should PASS. If this test fails in CI, it proves the E2E pipeline is working.

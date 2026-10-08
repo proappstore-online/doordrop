@@ -69,6 +69,7 @@ const ClientCampaignDetailPage: React.FC = () => {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [printoutError, setPrintoutError] = useState<string | null>(null);
 
   const [editBudget, setEditBudget] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
@@ -626,10 +627,18 @@ const ClientCampaignDetailPage: React.FC = () => {
           selectedPrintoutId={activePrintoutId}
           onSelectPrintout={async (id) => {
             if (!campaignId) return;
-            await CampaignRepository.updateGroup(campaignId, { activePrintoutId: id || undefined });
-            setCampaign((prev) => (prev ? { ...prev, activePrintoutId: id || undefined } : prev));
+            setPrintoutError(null);
+            try {
+              await CampaignRepository.updateGroup(campaignId, { activePrintoutId: id || undefined });
+              setCampaign((prev) => (prev ? { ...prev, activePrintoutId: id || undefined } : prev));
+            } catch (err) {
+              console.error("Failed to update active flyer:", err);
+              setPrintoutError("We couldn't update the active flyer. Your selection has been kept—please try again.");
+            }
           }}
-          locked={!!activePrintoutId}
+          locked={campaign.status !== "draft"}
+          error={printoutError}
+          onDismissError={() => setPrintoutError(null)}
         />
       )}
 
