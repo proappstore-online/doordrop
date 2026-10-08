@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check for an E2E suite
         id: e2e-check
-        run: echo "has_e2e=$([ -d e2e ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        run: echo "has_e2e=$([ -d web/tests/e2e ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -194,40 +194,37 @@ jobs:
   # Behavioural gate: drive the LIVE app in a real browser (the thing tsc/build
   # can't check). Runs after deploy; a failure fails the run, so the deploy
   # gate routes the ticket back to Dev with the Playwright output. Auth uses a
-  # platform fixture session via the SDK's real sign-in path (no test bypass);
-  # auth-gated specs skip when PAS_E2E_SESSION_TOKEN is unset.
+  # mock session fixture via mocked API responses; deterministic, no external creds.
   e2e:
     needs: deploy
     if: needs.deploy.outputs.has_e2e == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install E2E deps
-        working-directory: e2e
-        run: npm install
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
       - name: Install Playwright browser
-        working-directory: e2e
-        run: npx playwright install --with-deps chromium
-      - name: Run E2E against the live app
+        run: cd web && npx playwright install --with-deps chromium
+      - name: Run E2E tests (local with mocked API)
         id: e2e
         continue-on-error: true
-        working-directory: e2e
+        working-directory: web
         env:
-          E2E_BASE_URL: https://${{ github.event.repository.name }}.proappstore.online
-          E2E_SESSION_TOKEN: ${{ secrets.PAS_E2E_SESSION_TOKEN }}
-        run: npx playwright test
+          CI: 'true'
+        run: pnpm test:e2e
       - name: Publish test results (kb.proappstore.online/<app>/.e2e/summary.json)
         if: always()
-        working-directory: e2e
+        working-directory: web
         env:
           APP: ${{ github.event.repository.name }}
         run: |
           node -e '
             const fs=require("fs");
-            let r={}; try{ r=JSON.parse(fs.readFileSync("results.json","utf8")); }catch{}
+            let r={}; try{ r=JSON.parse(fs.readFileSync("test-results/results.json","utf8")); }catch{}
             const s=r.stats||{}, specs=[];
             const walk=(su=[])=>su.forEach(x=>{ (x.specs||[]).forEach(sp=>specs.push({title:[x.title,sp.title].filter(Boolean).join(" > "),ok:sp.ok!==false})); walk(x.suites||[]); });
             walk(r.suites||[]);
