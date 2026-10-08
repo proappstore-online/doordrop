@@ -23,7 +23,9 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
   }
 
   // authenticatedFetch already calls handleUnauthorized() on a 401.
-  const res = await pas.auth.authenticatedFetch(`${DATA_API_BASE}${path}`, { ...init, headers });
+  // no-store: responses are private/no-store anyway, and without it Chrome queues
+  // identical in-flight GETs behind one another (cache lock) — a stuck one stalls them all.
+  const res = await pas.auth.authenticatedFetch(`${DATA_API_BASE}${path}`, { cache: 'no-store', ...init, headers });
 
   if (res.status === 401) {
     throw new ApiError(401, 'session expired');
