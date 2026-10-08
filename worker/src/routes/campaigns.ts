@@ -155,7 +155,9 @@ const ALLOWED = [
 
 router.patch('/campaigns/:id', async (c) => {
   const campaignId = c.req.param('id');
-  const current = await requireCampaignAdmin(c, campaignId);
+  await requireCampaignAdmin(c, campaignId);
+  const current = await first(c, 'get_campaign', { id: campaignId });
+  if (!current) throw new HTTPException(404, { message: 'campaign not found' });
 
   const body = await c.req.json<Record<string, unknown>>();
   const updates = pickDefined(body, ALLOWED);
@@ -163,6 +165,7 @@ router.patch('/campaigns/:id', async (c) => {
   if (updates.status !== undefined && !VALID_STATUSES.has(updates.status as string)) {
     throw new HTTPException(400, { message: 'invalid status' });
   }
+
   if (updates.admin_ids !== undefined && !Array.isArray(updates.admin_ids)) {
     throw new HTTPException(400, { message: 'admin_ids must be array' });
   }

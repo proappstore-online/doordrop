@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { CampaignStatus, CampaignData } from "../../models/campaign";
+import { isCampaignClosed } from "../../models/campaign";
 
 interface CampaignNoticesProps {
   campaignStatus: CampaignStatus;
@@ -35,17 +36,18 @@ const CampaignNotices: React.FC<CampaignNoticesProps> = ({
   if (!hasDoors) missingItems.push("delivery locations");
 
   const isDraft = campaignStatus === "draft";
+  const isClosed = isCampaignClosed(campaignStatus);
   const showPublishNotice = isDraft && isAdmin && missingItems.length > 0 && !dismissedPublishNotice;
 
   return (
     <>
-      {isCampaignClosed && (
+      {isClosed && (
         <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm text-gray-600 dark:text-gray-400">
           This campaign is {campaignStatus}. Editing is disabled.
         </div>
       )}
 
-      {isWalker && !isAssignedWalker && !isCampaignClosed && (
+      {isWalker && !isAssignedWalker && !isClosed && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300">
           You are not assigned to this campaign yet. Door delivery tracking is view-only until you are assigned.
         </div>

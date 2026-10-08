@@ -60,3 +60,11 @@ export type TrackSession = {
   points: TrackPoint[];
   stops: TrackStop[];
 };
+
+export function isCampaignEditable(status: CampaignStatus): boolean {
+  return status === 'draft' || status === 'ready';
+}
+
+export function isCampaignClosed(status: CampaignStatus): boolean {
+  return status === 'archive' || status === 'complete' || status === 'review' || status === 'payment';
+}

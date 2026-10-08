@@ -6,6 +6,7 @@ import { useAuthContext } from "../../hooks/useAuthContext";
 import { useUserData } from "../../hooks/useUserData";
 import { UserRepository } from "../../repositories/userRepository";
 import type { CampaignData, CampaignStatus, TrackPoint, TrackStop } from "../../models/campaign";
+import { isCampaignClosed } from "../../models/campaign";
 import type { DoorData, DeliveryEvent } from "../../models/door";
 import CampaignMap from "../../components/campaign/CampaignMap";
 import DoorReportModal from "../../components/campaign/DoorReportModal";
@@ -101,7 +102,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const isWalker = userData?.role === "walker";
   const isAdmin = campaign?.adminIds?.includes(currentUser?.id || "") || false;
   const isAssignedWalker = campaign?.assignedWalkerId === currentUser?.id;
-  const isCampaignClosed = campaign?.status === "complete" || campaign?.status === "review" || campaign?.status === "payment" || campaign?.status === "archive";
+  const campaignClosed = campaign?.status ? isCampaignClosed(campaign.status) : false;
 
   const {
     state: trackingState,
@@ -120,7 +121,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   } = useDeliveryTracking();
 
   const isTracking = trackingState === "active";
-  const canEditDoors = (isAdmin || (isAssignedWalker && isTracking)) && !isCampaignClosed;
+  const canEditDoors = (isAdmin || (isAssignedWalker && isTracking)) && !campaignClosed;
 
   const doorManagement = useDoorManagement(campaignId, currentUser?.id, campaign, doors, setDoors);
   const printoutManagement = usePrintoutManagement(
@@ -607,7 +608,7 @@ const ClientCampaignDetailPage: React.FC = () => {
 
       <CampaignNotices
         campaignStatus={campaign.status}
-        isCampaignClosed={isCampaignClosed}
+        isCampaignClosed={campaignClosed}
         isWalker={isWalker}
         isAssignedWalker={isAssignedWalker}
         isAdmin={isAdmin}
@@ -615,7 +616,7 @@ const ClientCampaignDetailPage: React.FC = () => {
         totalDoors={doors.length}
       />
 
-      {isAssignedWalker && !isCampaignClosed && (
+      {isAssignedWalker && !campaignClosed && (
         <DeliveryTrackingPanel
           trackingState={trackingState}
           doorRadiusM={campaign.doorRadiusM || 100}
@@ -854,7 +855,7 @@ const ClientCampaignDetailPage: React.FC = () => {
           flyersLoading={printoutManagement.flyersLoading}
           selectedFlyerId={printoutManagement.selectedFlyerId}
           saving={printoutManagement.savingPrintout}
-          isCampaignClosed={isCampaignClosed}
+          isCampaignClosed={campaignClosed}
           error={printoutManagement.printoutError}
           onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
           onNameChange={printoutManagement.setPrintoutName}
@@ -875,7 +876,7 @@ const ClientCampaignDetailPage: React.FC = () => {
           walkerName={interestedWalkers.find((w) => w.walker.id === campaign.assignedWalkerId)?.walker.name || campaign.assignedWalkerId}
           onUnassign={walkerInterest.handleUnassignWalker}
           unassigning={walkerInterest.assigningWalkerId === "unassign"}
-          isCampaignClosed={isCampaignClosed}
+          isCampaignClosed={campaignClosed}
         />
       )}
 
@@ -885,7 +886,7 @@ const ClientCampaignDetailPage: React.FC = () => {
           assignedWalkerId={campaign.assignedWalkerId || null}
           votingId={walkerInterest.votingId}
           assigningWalkerId={walkerInterest.assigningWalkerId}
-          isCampaignClosed={isCampaignClosed}
+          isCampaignClosed={campaignClosed}
           assignmentError={walkerInterest.assignmentError}
           onVote={walkerInterest.handleVote}
           onAssign={walkerInterest.handleAssignWalker}
