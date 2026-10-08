@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthContext } from "../../hooks/useAuthContext";
+import { useClientProfileCompletion } from "../../hooks/useClientProfileCompletion";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import type { CampaignData } from "../../models/campaign";
 import {
@@ -141,6 +142,7 @@ function PortfolioSectionView({
 
 export default function ClientDashboard() {
   const { currentUser } = useAuthContext();
+  const { needsOnboarding } = useClientProfileCompletion();
   const [campaigns, setCampaigns] = useState<CampaignWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +196,30 @@ export default function ClientDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-2 py-3 sm:px-4">
+      {needsOnboarding && (
+        <section
+          role="status"
+          className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/20"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-blue-900 dark:text-blue-100">
+                Complete your profile
+              </h2>
+              <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">
+                Set up your business details and contact information before creating campaigns.
+              </p>
+            </div>
+            <Link
+              to="/app/onboarding"
+              className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Complete setup
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Campaigns</h1>

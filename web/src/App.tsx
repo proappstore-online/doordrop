@@ -4,6 +4,7 @@ import RoleSelectionPage from './pages/auth/RoleSelectionPage';
 import ErrorPage from './pages/error/ErrorPage';
 import MainLayout from './components/layout/MainLayout';
 import PrivateRoute from './routes/PrivateRoute';
+import ClientOnboardingGuard from './routes/ClientOnboardingGuard';
 import ClientDashboard from './pages/client/ClientDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminLayout from './pages/admin/AdminLayout';
@@ -55,24 +56,29 @@ const router = createBrowserRouter([
     element: <PrivateRoute allowedRoles={['client']} />,
     children: [
       {
-        element: <MainLayout />,
+        element: <ClientOnboardingGuard />,
         children: [
-          { path: '/app', element: <ClientDashboard /> },
-          { path: '/app/onboarding', element: <ClientOnboardingPage /> },
-          { path: '/app/setup', element: <CampaignSetupPage /> },
-          { path: '/app/campaign/:campaignId', element: <ClientCampaignDetailPage /> },
-          { path: '/app/campaign/:campaignId/door/:doorId', element: <DoorDetailPage /> },
-          { path: '/app/flyers', element: <FlyersPage /> },
-          { path: '/app/properties', element: <PropertiesPage /> },
-          { path: '/app/properties/:propertyId', element: <PropertyDetailPage /> },
-          { path: '/app/user/:userId', element: <UserProfilePage /> },
-          { path: '/app/user/:userId/edit', element: <UserProfileEditPage /> },
-          { path: '/app/account', element: <AccountSettingsPage /> },
-          { path: '/app/preferences', element: <UserPreferencesPage /> },
-          { path: '/app/messages', element: <MessagesPage /> },
-          { path: '/app/messages/:campaignId', element: <MessagesPage /> },
-          { path: '/app/walkers', element: <WalkersPage /> },
-          { path: '/app/sharehire', element: <ShareHirePage /> },
+          {
+            element: <MainLayout />,
+            children: [
+              { path: '/app', element: <ClientDashboard /> },
+              { path: '/app/onboarding', element: <ClientOnboardingPage /> },
+              { path: '/app/setup', element: <CampaignSetupPage /> },
+              { path: '/app/campaign/:campaignId', element: <ClientCampaignDetailPage /> },
+              { path: '/app/campaign/:campaignId/door/:doorId', element: <DoorDetailPage /> },
+              { path: '/app/flyers', element: <FlyersPage /> },
+              { path: '/app/properties', element: <PropertiesPage /> },
+              { path: '/app/properties/:propertyId', element: <PropertyDetailPage /> },
+              { path: '/app/user/:userId', element: <UserProfilePage /> },
+              { path: '/app/user/:userId/edit', element: <UserProfileEditPage /> },
+              { path: '/app/account', element: <AccountSettingsPage /> },
+              { path: '/app/preferences', element: <UserPreferencesPage /> },
+              { path: '/app/messages', element: <MessagesPage /> },
+              { path: '/app/messages/:campaignId', element: <MessagesPage /> },
+              { path: '/app/walkers', element: <WalkersPage /> },
+              { path: '/app/sharehire', element: <ShareHirePage /> },
+            ],
+          },
         ],
       },
     ],
