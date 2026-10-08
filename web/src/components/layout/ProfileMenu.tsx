@@ -38,8 +38,12 @@ const ProfileMenu: React.FC = () => {
     setIsOpen(false);
     try {
       await logout();
+      // Redirect to login after successful logout. The SDK clears auth state,
+      // but we need to explicitly navigate to ensure the user sees the login page.
+      window.location.replace("/login");
     } catch (error) {
       console.error("Logout failed:", error);
+      // Even if logout() throws, clear the session and force redirect
       window.location.replace("/login");
     } finally {
       setIsLoggingOut(false);
