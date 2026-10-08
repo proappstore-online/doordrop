@@ -4,4 +4,5 @@ export type FlyerData = {
   fileUrl?: string;
   createdAt: Date;
   createdBy: string;
+  archivedAt?: Date;
 };

@@ -39,9 +39,41 @@ router.patch('/users/:userId/flyers/:flyerId', async (c) => {
   return c.json({ ok: true });
 });
 
+router.patch('/users/:userId/flyers/:flyerId/archive', async (c) => {
+  await requireSelf(c);
+  await run(c, 'archive_flyer', { id: c.req.param('flyerId') });
+  return c.json({ ok: true });
+});
+
+router.patch('/users/:userId/flyers/:flyerId/unarchive', async (c) => {
+  await requireSelf(c);
+  await run(c, 'unarchive_flyer', { id: c.req.param('flyerId') });
+  return c.json({ ok: true });
+});
+
+router.get('/users/:userId/flyers/:flyerId/campaigns', async (c) => {
+  await requireSelf(c);
+  const campaigns = await rows(c, 'list_campaigns_using_flyer', { flyer_id: c.req.param('flyerId') });
+  return c.json(campaigns);
+});
+
 router.delete('/users/:userId/flyers/:flyerId', async (c) => {
   await requireSelf(c);
-  await run(c, 'delete_flyer', { id: c.req.param('flyerId') });
+  const flyerId = c.req.param('flyerId');
+
+  // Check for campaigns using this flyer
+  const dependents = await rows(c, 'list_campaigns_using_flyer', { flyer_id: flyerId });
+  if (dependents.length > 0) {
+    return c.json(
+      {
+        error: 'Cannot delete flyer: it is referenced by campaigns',
+        campaigns: dependents.map((d: any) => d.id)
+      },
+      409
+    );
+  }
+
+  await run(c, 'delete_flyer', { id: flyerId });
   return c.json({ ok: true });
 });
 

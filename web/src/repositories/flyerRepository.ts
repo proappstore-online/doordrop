@@ -4,6 +4,12 @@ import { fromWire, toWire } from '../lib/transform';
 
 export type FlyerWithId = FlyerData & { id: string };
 
+export interface CampaignDependency {
+  id: string;
+  name: string;
+  status: string;
+}
+
 export const FlyerRepository = {
   async getFlyers(userId: string): Promise<FlyerWithId[]> {
     const raw = await apiGet<unknown[]>(`/v1/users/${encodeURIComponent(userId)}/flyers`);
@@ -27,6 +33,21 @@ export const FlyerRepository = {
       `/v1/users/${encodeURIComponent(userId)}/flyers/${flyerId}`,
       toWire(data),
     );
+  },
+
+  async archiveFlyer(userId: string, flyerId: string): Promise<void> {
+    await apiPatch(`/v1/users/${encodeURIComponent(userId)}/flyers/${flyerId}/archive`, {});
+  },
+
+  async unarchiveFlyer(userId: string, flyerId: string): Promise<void> {
+    await apiPatch(`/v1/users/${encodeURIComponent(userId)}/flyers/${flyerId}/unarchive`, {});
+  },
+
+  async getCampaignsUsingFlyer(userId: string, flyerId: string): Promise<CampaignDependency[]> {
+    const raw = await apiGet<unknown[]>(
+      `/v1/users/${encodeURIComponent(userId)}/flyers/${flyerId}/campaigns`,
+    );
+    return raw.map((r) => fromWire<CampaignDependency>(r));
   },
 
   async deleteFlyer(userId: string, flyerId: string): Promise<void> {

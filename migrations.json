@@ -7,6 +7,10 @@
     {
       "name": "0002_bookings",
       "sql": "-- ShareHire bookings: a campaign admin books a walker for a day (issue #6).\n-- Was the Firestore campaigns/{id}/bookings subcollection.\nCREATE TABLE IF NOT EXISTS bookings (\n  id TEXT PRIMARY KEY,\n  campaign_id TEXT NOT NULL REFERENCES campaigns(id),\n  walker_id TEXT NOT NULL,\n  walker_name TEXT,\n  client_id TEXT NOT NULL,\n  date INTEGER NOT NULL,\n  door_count INTEGER NOT NULL,\n  rate_per_door REAL NOT NULL,\n  total_price REAL NOT NULL,\n  price_per_member REAL NOT NULL,\n  member_count INTEGER NOT NULL,\n  status TEXT NOT NULL DEFAULT 'pending',\n  created_at INTEGER NOT NULL\n);\n\nCREATE INDEX IF NOT EXISTS idx_bookings_campaign_created ON bookings(campaign_id, created_at);\nCREATE INDEX IF NOT EXISTS idx_bookings_walker ON bookings(walker_id);"
+    },
+    {
+      "name": "0003_flyer_archive",
+      "sql": "-- Issue #51: Add archival support for library flyers to prevent silent mutation of campaign history.\n-- Archived flyers are hidden from new campaign selections but existing campaigns remain unaffected.\nALTER TABLE flyers ADD COLUMN archived_at INTEGER;"
     }
   ]
 }

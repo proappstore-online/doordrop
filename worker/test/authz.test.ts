@@ -732,4 +732,100 @@ describe('admin area', () => {
       expect(appendPoint.status).toBe(200);
     });
   });
+
+  describe('Issue #51: flyer immutability and archive rules', () => {
+    it('cannot delete a flyer that is referenced by a campaign printout', async () => {
+      // Create a flyer
+      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Test Flyer' });
+      expect(flyerRes.status).toBe(201);
+      const flyerId = flyerRes.body.id;
+
+      // Create a campaign and printout referencing the flyer
+      const campaignRes = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Test Campaign' });
+      expect(campaignRes.status).toBe(201);
+      const cId = campaignRes.body.id;
+
+      const printoutRes = await req(CLIENT_1, 'POST', `/v1/campaigns/${cId}/printouts`, {
+        name: 'Printout 1',
+        flyer_id: flyerId,
+      });
+      expect(printoutRes.status).toBe(201);
+
+      // Try to delete the flyer - should fail with 409
+      const deleteRes = await req(CLIENT_1, 'DELETE', `/v1/users/${CLIENT_1}/flyers/${flyerId}`);
+      expect(deleteRes.status).toBe(409);
+      expect(deleteRes.body).toHaveProperty('campaigns');
+      expect(deleteRes.body.campaigns).toContain(cId);
+
+      // Verify flyer still exists
+      const flyersRes = await req(CLIENT_1, 'GET', `/v1/users/${CLIENT_1}/flyers`);
+      expect(flyersRes.body).toHaveLength(1);
+    });
+
+    it('can delete a flyer that has no campaign references', async () => {
+      // Create a flyer with no campaigns
+      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Orphan Flyer' });
+      expect(flyerRes.status).toBe(201);
+      const flyerId = flyerRes.body.id;
+
+      // Delete should succeed
+      const deleteRes = await req(CLIENT_1, 'DELETE', `/v1/users/${CLIENT_1}/flyers/${flyerId}`);
+      expect(deleteRes.status).toBe(200);
+
+      // Verify flyer is gone
+      const flyersRes = await req(CLIENT_1, 'GET', `/v1/users/${CLIENT_1}/flyers`);
+      expect(flyersRes.body).toHaveLength(0);
+    });
+
+    it('can archive and unarchive a flyer', async () => {
+      // Create a flyer
+      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Archivable Flyer' });
+      expect(flyerRes.status).toBe(201);
+      const flyerId = flyerRes.body.id;
+
+      // Archive the flyer
+      const archiveRes = await req(CLIENT_1, 'PATCH', `/v1/users/${CLIENT_1}/flyers/${flyerId}/archive`, {});
+      expect(archiveRes.status).toBe(200);
+
+      // Verify archived_at is set
+      const archivedFlyer = (await direct(CLIENT_1, 'list_my_flyers')).rows[0]!;
+      expect(archivedFlyer.archived_at).toBeTruthy();
+
+      // Unarchive the flyer
+      const unarchiveRes = await req(CLIENT_1, 'PATCH', `/v1/users/${CLIENT_1}/flyers/${flyerId}/unarchive`, {});
+      expect(unarchiveRes.status).toBe(200);
+
+      // Verify archived_at is null
+      const unarchivedFlyer = (await direct(CLIENT_1, 'list_my_flyers')).rows[0]!;
+      expect(unarchivedFlyer.archived_at).toBeNull();
+    });
+
+    it('cannot update a printout if campaign delivery has started', async () => {
+      // Create a campaign and printout
+      const campaignRes = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Immutable Campaign' });
+      expect(campaignRes.status).toBe(201);
+      const cId = campaignRes.body.id;
+
+      const printoutRes = await req(CLIENT_1, 'POST', `/v1/campaigns/${cId}/printouts`, { name: 'Original Name' });
+      expect(printoutRes.status).toBe(201);
+      const pId = printoutRes.body.id;
+
+      // Update should succeed while in draft
+      const updateDraftRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}/printouts/${pId}`, {
+        name: 'Updated Name',
+      });
+      expect(updateDraftRes.status).toBe(200);
+
+      // Change campaign status to 'ready' (delivery started)
+      const statusRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}`, { status: 'ready' });
+      expect(statusRes.status).toBe(200);
+
+      // Try to update printout - should fail with 409
+      const updateLockedRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}/printouts/${pId}`, {
+        name: 'Another Name',
+      });
+      expect(updateLockedRes.status).toBe(409);
+      expect(updateLockedRes.body.campaignStatus).toBe('ready');
+    });
+  });
 });

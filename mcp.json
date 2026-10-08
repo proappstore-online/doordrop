@@ -529,9 +529,9 @@
     },
     {
       "name": "update_printout",
-      "description": "Campaign admin: update a printout",
+      "description": "Campaign admin: update a printout (issue #51: blocked if campaign delivery has started)",
       "operation": "execute",
-      "sql": "UPDATE printouts SET version = CASE WHEN json_type(:patch, '$.version') IS NULL THEN version ELSE json_extract(:patch, '$.version') END, name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, description = CASE WHEN json_type(:patch, '$.description') IS NULL THEN description ELSE json_extract(:patch, '$.description') END, file_url = CASE WHEN json_type(:patch, '$.file_url') IS NULL THEN file_url ELSE json_extract(:patch, '$.file_url') END, flyer_id = CASE WHEN json_type(:patch, '$.flyer_id') IS NULL THEN flyer_id ELSE json_extract(:patch, '$.flyer_id') END WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "sql": "UPDATE printouts SET version = CASE WHEN json_type(:patch, '$.version') IS NULL THEN version ELSE json_extract(:patch, '$.version') END, name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, description = CASE WHEN json_type(:patch, '$.description') IS NULL THEN description ELSE json_extract(:patch, '$.description') END, file_url = CASE WHEN json_type(:patch, '$.file_url') IS NULL THEN file_url ELSE json_extract(:patch, '$.file_url') END, flyer_id = CASE WHEN json_type(:patch, '$.flyer_id') IS NULL THEN flyer_id ELSE json_extract(:patch, '$.flyer_id') END WHERE id = :id AND campaign_id = :campaign_id AND EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) AND EXISTS (SELECT 1 FROM campaigns ca WHERE ca.id = :campaign_id AND ca.status = 'draft')",
       "params": {
         "id": {
           "type": "string"
@@ -594,7 +594,7 @@
     },
     {
       "name": "update_flyer",
-      "description": "Update one of the caller's flyers",
+      "description": "Update one of the caller's flyers (issue #51: cannot unarchive via patch)",
       "operation": "execute",
       "sql": "UPDATE flyers SET name = CASE WHEN json_type(:patch, '$.name') IS NULL THEN name ELSE json_extract(:patch, '$.name') END, description = CASE WHEN json_type(:patch, '$.description') IS NULL THEN description ELSE json_extract(:patch, '$.description') END, file_url = CASE WHEN json_type(:patch, '$.file_url') IS NULL THEN file_url ELSE json_extract(:patch, '$.file_url') END WHERE id = :id AND owner_id = :__user_id AND (json_type(:patch, '$.name') IS NULL OR length(json_extract(:patch, '$.name')) <= 200)",
       "params": {
@@ -603,16 +603,52 @@
         },
         "patch": {
           "type": "string",
-          "description": "JSON object of the columns to change"
+          "description": "JSON object of the columns to change (name, description, file_url only)"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "archive_flyer",
+      "description": "Archive one of the caller's flyers (issue #51: archive hides from new selections)",
+      "operation": "execute",
+      "sql": "UPDATE flyers SET archived_at = :__now WHERE id = :id AND owner_id = :__user_id AND archived_at IS NULL",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "unarchive_flyer",
+      "description": "Unarchive one of the caller's flyers",
+      "operation": "execute",
+      "sql": "UPDATE flyers SET archived_at = NULL WHERE id = :id AND owner_id = :__user_id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
+      "name": "list_campaigns_using_flyer",
+      "description": "Campaigns that have a printout referencing this flyer (issue #51: dependency check)",
+      "operation": "query",
+      "sql": "SELECT DISTINCT c.id, c.name, c.status FROM campaigns c JOIN printouts p ON p.campaign_id = c.id WHERE p.flyer_id = :flyer_id AND c.id IN (SELECT campaign_id FROM campaigns ca, json_each(ca.admin_ids) aj WHERE aj.value = :__user_id) ORDER BY c.created_at DESC",
+      "params": {
+        "flyer_id": {
+          "type": "string"
         }
       },
       "requires_auth": true
     },
     {
       "name": "delete_flyer",
-      "description": "Delete one of the caller's flyers",
+      "description": "Delete one of the caller's flyers (issue #51: blocked if any campaign references it)",
       "operation": "execute",
-      "sql": "DELETE FROM flyers WHERE id = :id AND owner_id = :__user_id",
+      "sql": "DELETE FROM flyers WHERE id = :id AND owner_id = :__user_id AND NOT EXISTS (SELECT 1 FROM printouts WHERE flyer_id = :id)",
       "params": {
         "id": {
           "type": "string"
