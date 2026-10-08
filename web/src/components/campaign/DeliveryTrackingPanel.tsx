@@ -17,7 +17,15 @@ interface DeliveryTrackingPanelProps {
   doors: (DoorData & { id: string })[];
   campaignId: string | undefined;
   currentUserId: string | undefined;
-  onStartTracking: (doors: (DoorData & { id: string })[], campaignId: string | undefined, userId: string | undefined, radius: number, callback: (doorId: string) => Promise<void>) => void;
+  onStartTracking: (
+    doors: (DoorData & { id: string })[],
+    campaignId: string | undefined,
+    userId: string | undefined,
+    radius: number,
+    callback: (doorId: string) => Promise<void>,
+    junkMailPolicy?: 'deliver' | 'skip',
+    propertyFilter?: 'all' | 'residential' | 'commercial',
+  ) => void;
   onStopTracking: () => void;
   onDismissError: () => void;
   onDoorVisited: (doorId: string) => Promise<void>;
@@ -77,7 +85,7 @@ const DeliveryTrackingPanel: React.FC<DeliveryTrackingPanelProps> = ({
             </div>
           )}
           <button
-            onClick={() => onStartTracking(doors, campaignId, currentUserId, doorRadiusM, onDoorVisited)}
+            onClick={() => onStartTracking(doors, campaignId, currentUserId, doorRadiusM, onDoorVisited, junkMailPolicy, propertyFilter)}
             className="w-full px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
           >
             Start Tracking

@@ -51,8 +51,19 @@ function isNearAnyDoor(
 
 function getNearbyDoorIds(
   pos: { lat: number; lng: number },
-  doors: { id: string; lat: number; lng: number }[],
+  doors: {
+    id: string;
+    lat: number;
+    lng: number;
+    propertyType?: 'residential' | 'commercial';
+    junkMailEligible?: boolean;
+    eligibilityConfidence?: 'certain' | 'uncertain' | 'unknown';
+  }[],
   radiusM: number,
+  filters?: {
+    junkMailPolicy?: 'deliver' | 'skip';
+    propertyFilter?: 'all' | 'residential' | 'commercial';
+  },
 ): string[] {
   const { dLat, dLng } = bboxDeltas(pos.lat, radiusM);
   const minLat = pos.lat - dLat, maxLat = pos.lat + dLat;
@@ -60,7 +71,19 @@ function getNearbyDoorIds(
   const result: string[] = [];
   for (const d of doors) {
     if (d.lat < minLat || d.lat > maxLat || d.lng < minLng || d.lng > maxLng) continue;
-    if (distanceMeters(pos, d) <= radiusM) result.push(d.id);
+    if (distanceMeters(pos, d) > radiusM) continue;
+
+    // Apply eligibility filters: exclude if unknown confidence
+    if (d.eligibilityConfidence === 'unknown') continue;
+
+    // Apply junk mail policy filter
+    if (filters?.junkMailPolicy === 'skip' && d.junkMailEligible === false) continue;
+
+    // Apply property type filter
+    if (filters?.propertyFilter === 'residential' && d.propertyType === 'commercial') continue;
+    if (filters?.propertyFilter === 'commercial' && d.propertyType === 'residential') continue;
+
+    result.push(d.id);
   }
   return result;
 }
@@ -127,6 +150,7 @@ export function useDeliveryTracking() {
   const flushedStopsRef = useRef<TrackStop[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const keepActiveRef = useRef<{ stop: () => void } | null>(null);
+  const campaignFiltersRef = useRef<{ junkMailPolicy?: 'deliver' | 'skip'; propertyFilter?: 'all' | 'residential' | 'commercial' } | null>(null);
 
   const updateDoorVisitedCallback = useCallback((cb: ((doorId: string) => void) | null) => {
     onDoorVisitedRef.current = cb;
@@ -264,7 +288,7 @@ export function useDeliveryTracking() {
       if (isNearAnyDoor(position, doors, radiusM)) {
         outsideSinceRef.current = null;
 
-        const nearbyIds = getNearbyDoorIds(position, doors, radiusM);
+        const nearbyIds = getNearbyDoorIds(position, doors, radiusM, campaignFiltersRef.current ?? undefined);
         const visited = visitedDoorIdsRef.current;
         const callback = onDoorVisitedRef.current;
 
@@ -418,12 +442,25 @@ export function useDeliveryTracking() {
       walkerId?: string,
       doorRadiusM?: number,
       onDoorVisited?: (doorId: string) => void,
+      junkMailPolicy?: 'deliver' | 'skip',
+      propertyFilter?: 'all' | 'residential' | 'commercial',
     ) => {
       const withCoords = doors.filter((d) => d.lat && d.lng && d.id);
       if (withCoords.length === 0) return;
 
-      doorsRef.current = withCoords.map((d) => ({ id: d.id!, lat: d.lat!, lng: d.lng! }));
+      doorsRef.current = withCoords.map((d) => ({
+        id: d.id!,
+        lat: d.lat!,
+        lng: d.lng!,
+        propertyType: d.propertyType,
+        junkMailEligible: d.junkMailEligible,
+        eligibilityConfidence: d.eligibilityConfidence,
+      }));
       radiusMRef.current = doorRadiusM ?? 100;
+      campaignFiltersRef.current = {
+        junkMailPolicy,
+        propertyFilter,
+      };
       outsideSinceRef.current = null;
       visitedDoorIdsRef.current = new Set();
       doorRetryCountRef.current.clear();

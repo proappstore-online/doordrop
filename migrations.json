@@ -11,6 +11,10 @@
     {
       "name": "0003_flyer_archive",
       "sql": "-- Issue #51: Add archival support for library flyers to prevent silent mutation of campaign history.\n-- Archived flyers are hidden from new campaign selections but existing campaigns remain unaffected.\nALTER TABLE flyers ADD COLUMN archived_at INTEGER;"
+    },
+    {
+      "name": "0004_door_eligibility",
+      "sql": "-- Issue #42: Add delivery-policy eligibility metadata to doors table.\n-- Tracks property type, junk mail eligibility, and confidence level.\n-- Used to enforce campaign property_filter and junk_mail_policy during delivery.\nALTER TABLE doors ADD COLUMN property_type TEXT CHECK (property_type IN ('residential','commercial'));\nALTER TABLE doors ADD COLUMN junk_mail_eligible INTEGER;\nALTER TABLE doors ADD COLUMN eligibility_confidence TEXT CHECK (eligibility_confidence IN ('certain','uncertain','unknown'));"
     }
   ]
 }

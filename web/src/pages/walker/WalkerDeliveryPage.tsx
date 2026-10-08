@@ -343,7 +343,15 @@ const WalkerDeliveryPage: React.FC = () => {
                 </button>
               </div>
               <button
-                onClick={() => startTracking(doors, campaignId, currentUser?.id, campaign?.doorRadiusM || 100, autoDeliver ? handleDoorVisited : undefined)}
+                onClick={() => startTracking(
+                  doors,
+                  campaignId,
+                  currentUser?.id,
+                  campaign?.doorRadiusM || 100,
+                  autoDeliver ? handleDoorVisited : undefined,
+                  campaign?.junkMailPolicy,
+                  campaign?.propertyFilter,
+                )}
                 className="w-full px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
               >
                 Start Tracking

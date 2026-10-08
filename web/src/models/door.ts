@@ -19,4 +19,8 @@ export type DoorData = {
   deliveryCount?: number;
   history?: DeliveryEvent[];
   propertyId?: string;
+  // Eligibility metadata for delivery-policy enforcement
+  propertyType?: 'residential' | 'commercial';
+  junkMailEligible?: boolean;
+  eligibilityConfidence?: 'certain' | 'uncertain' | 'unknown';
 };

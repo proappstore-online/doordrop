@@ -390,7 +390,7 @@
       "name": "create_door",
       "description": "Campaign admin: add a door",
       "operation": "execute",
-      "sql": "INSERT INTO doors (id, campaign_id, address, street_name, house_number, lat, lng, status, delivered_at, delivered_by, delivery_count, history, property_id) SELECT :id, :campaign_id, :address, :street_name, :house_number, :lat, :lng, :status, NULL, NULL, 0, '[]', :property_id WHERE EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
+      "sql": "INSERT INTO doors (id, campaign_id, address, street_name, house_number, lat, lng, status, delivered_at, delivered_by, delivery_count, history, property_id, property_type, junk_mail_eligible, eligibility_confidence) SELECT :id, :campaign_id, :address, :street_name, :house_number, :lat, :lng, :status, NULL, NULL, 0, '[]', :property_id, CASE WHEN :property_id IS NULL THEN NULL WHEN (SELECT commercial FROM properties WHERE id = :property_id LIMIT 1) = 1 THEN 'commercial' ELSE 'residential' END, CASE WHEN :property_id IS NULL THEN NULL WHEN EXISTS (SELECT 1 FROM property_reports WHERE property_id = :property_id AND reason = 'no_junk_mail') THEN 0 ELSE 1 END, CASE WHEN :property_id IS NULL THEN 'unknown' ELSE 'certain' END WHERE EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id)",
       "params": {
         "id": {
           "type": "string"
