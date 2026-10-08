@@ -462,22 +462,23 @@ const WalkerDeliveryPage: React.FC = () => {
 
       {viewMode === "map" && (
         <div className="flex-1">
-          <CampaignMap
-            center={
-              walkerPosition ||
-              (doors.find((d) => d.lat && d.lng)
-                ? { lat: doors.find((d) => d.lat && d.lng)!.lat!, lng: doors.find((d) => d.lat && d.lng)!.lng! }
-                : { lat: campaign.lat || -33.8688, lng: campaign.lng || 151.2093 })
-            }
-            doors={doors}
-            walkerPosition={walkerPosition}
-            trackPoints={trackPoints}
-            trackStops={trackStops}
-            doorRadiusM={campaign.doorRadiusM}
-            isTracking={isTracking}
-            onDoorClick={canEditDoors ? (door) => handleDoorClick(door as DoorData & { id: string }) : undefined}
-            className="w-full h-full"
-          />
+          {(() => {
+            const doorWithCoords = doors.find((d) => d.lat && d.lng);
+            const center = walkerPosition || (doorWithCoords ? { lat: doorWithCoords.lat!, lng: doorWithCoords.lng! } : { lat: campaign.lat || -33.8688, lng: campaign.lng || 151.2093 });
+            return (
+              <CampaignMap
+                center={center}
+                doors={doors}
+                walkerPosition={walkerPosition}
+                trackPoints={trackPoints}
+                trackStops={trackStops}
+                doorRadiusM={campaign.doorRadiusM}
+                isTracking={isTracking}
+                onDoorClick={canEditDoors ? (door) => handleDoorClick(door as DoorData & { id: string }) : undefined}
+                className="w-full h-full"
+              />
+            );
+          })()}
         </div>
       )}
 
