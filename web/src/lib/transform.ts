@@ -43,7 +43,8 @@ export function fromWire<T = unknown>(obj: unknown): T {
 }
 
 export function toWire<T = unknown>(obj: unknown): T {
-  if (obj === null || obj === undefined) return obj as T;
+  if (obj === null) return obj as T;
+  if (obj === undefined) return null as unknown as T; // Serialize undefined as null for field clearing
   if (obj instanceof Date) return obj.getTime() as unknown as T;
   if (Array.isArray(obj)) return obj.map((x) => toWire(x)) as unknown as T;
   if (typeof obj !== 'object') return obj as T;

@@ -14,8 +14,10 @@ interface WalkerInterestPanelProps {
   votingId: string | null;
   assigningWalkerId: string | null;
   isCampaignClosed: boolean;
+  assignmentError?: string | null;
   onVote: (interestId: string) => void;
   onAssign: (walkerId: string) => void;
+  onDismissError?: () => void;
 }
 
 const WalkerInterestPanel: React.FC<WalkerInterestPanelProps> = ({
@@ -24,14 +26,46 @@ const WalkerInterestPanel: React.FC<WalkerInterestPanelProps> = ({
   votingId,
   assigningWalkerId,
   isCampaignClosed,
+  assignmentError,
   onVote,
   onAssign,
+  onDismissError,
 }) => {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
         Interested Walkers ({interestedWalkers.length})
       </h2>
+      {assignmentError && (
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-red-600 dark:text-red-200"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                {assignmentError}
+              </p>
+            </div>
+            <button
+              onClick={onDismissError}
+              className="flex-shrink-0 text-red-600 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
       {interestedWalkers.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 text-center">
           <p className="text-gray-500 dark:text-gray-400 text-sm">

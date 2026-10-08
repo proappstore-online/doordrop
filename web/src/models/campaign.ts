@@ -28,7 +28,7 @@ export type CampaignData = {
   updatedAt?: Date;
   memberIds?: string[]; // User IDs of members in group
   userPayment?: userPayment;
-  assignedWalkerId?: string; // Currently committed walker
+  assignedWalkerId?: string | null; // Currently committed walker
   scheduleRule?: DeliveryScheduleRule; // Schedule rule for roster groups
   totalDoors?: number;
   budget?: number;

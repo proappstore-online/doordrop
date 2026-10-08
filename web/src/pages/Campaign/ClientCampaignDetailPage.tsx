@@ -696,8 +696,10 @@ const ClientCampaignDetailPage: React.FC = () => {
           votingId={walkerInterest.votingId}
           assigningWalkerId={walkerInterest.assigningWalkerId}
           isCampaignClosed={isCampaignClosed}
+          assignmentError={walkerInterest.assignmentError}
           onVote={walkerInterest.handleVote}
           onAssign={walkerInterest.handleAssignWalker}
+          onDismissError={walkerInterest.dismissError}
         />
       )}
 
