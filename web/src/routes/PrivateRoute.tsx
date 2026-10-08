@@ -24,6 +24,12 @@ export default function PrivateRoute({ allowedRoles }: Props) {
     return <Navigate to="/select-role" replace />;
   }
 
+  // Enrolled users should not be on the role selection page; redirect to their home
+  if (!needsRoleSelection && location.pathname === '/select-role' && userData) {
+    const target = userData.role === 'walker' ? '/walker' : userData.role === 'admin' ? '/admin' : '/app';
+    return <Navigate to={target} replace />;
+  }
+
   // If profile failed to load, show error screen with retry/sign-out options
   if (error) {
     return <ProfileLoadError error={error} onRetry={refetch} />;
