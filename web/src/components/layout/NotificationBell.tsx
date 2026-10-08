@@ -16,7 +16,7 @@ const timeAgo = (date: Date): string => {
 };
 
 const NotificationBell: React.FC = () => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, refresh } = useNotifications();
   const { userData } = useUserData();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -47,7 +47,7 @@ const NotificationBell: React.FC = () => {
   }, [open]);
 
   const handleNotificationClick = (notification: (typeof notifications)[0]) => {
-    if (!notification.read) markAsRead(notification.id);
+    if (!notification.read) void markAsRead(notification.id);
     if (notification.campaignId) {
       const basePath = userData?.role === "walker" ? "/walker" : "/app";
       navigate(`${basePath}/campaign/${notification.campaignId}`);
@@ -55,10 +55,16 @@ const NotificationBell: React.FC = () => {
     setOpen(false);
   };
 
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) void refresh();
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         className="relative p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
         aria-label="Notifications"
       >
@@ -83,7 +89,7 @@ const NotificationBell: React.FC = () => {
             <span className="font-semibold text-gray-900 dark:text-white text-sm">Notifications</span>
             {unreadCount > 0 && (
               <button
-                onClick={markAllAsRead}
+                onClick={() => void markAllAsRead()}
                 className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
               >
                 Mark all read

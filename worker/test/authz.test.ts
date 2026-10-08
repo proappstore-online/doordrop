@@ -65,6 +65,22 @@ describe('/v1/me', () => {
   });
 });
 
+describe('unread message badge summary', () => {
+  it('returns one caller-scoped count instead of querying every campaign', async () => {
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n-unread', ?, ?, 'C1', 'new', 100)")
+      .run(campaignId, CLIENT_1);
+
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
+    expect((await req(WALKER_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
+    expect((await req(CLIENT_2, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
+
+    db.prepare('INSERT INTO chat_read_state (user_id, campaign_id, last_read_at) VALUES (?, ?, ?)')
+      .run(CLIENT_1, campaignId, 100);
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
+    expect((await direct(CLIENT_2, 'count_my_unread_campaign_messages')).rows).toEqual([{ unread_count: 0 }]);
+  });
+});
+
 describe('a client cannot edit another client\'s campaign', () => {
   it('through the worker', async () => {
     expect((await req(CLIENT_2, 'PATCH', `/v1/campaigns/${campaignId}`, { name: 'mine now' })).status).toBe(403);

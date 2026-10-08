@@ -58,4 +58,11 @@ router.get('/users/:userId/chat-read-state', async (c) => {
   return c.json(states);
 });
 
+// The persistent top-bar badge must be a single query. Fetching each campaign
+// and its latest note on a timer made worker traffic grow with campaign count.
+router.get('/me/unread-messages', async (c) => {
+  const result = await rows<{ unread_count: number }>(c, 'count_my_unread_campaign_messages');
+  return c.json({ unreadCount: Number(result[0]?.unread_count ?? 0) });
+});
+
 export default router;

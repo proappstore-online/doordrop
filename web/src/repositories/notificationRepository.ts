@@ -5,27 +5,11 @@ import { fromWire } from '../lib/transform';
 export type NotificationWithId = NotificationData & { id: string };
 
 export const NotificationRepository = {
-  // TODO(task #11): port to fas.rooms `notifications:{userId}` for true real-time.
-  // Polling for now; rooms integration handled at page level via useApp() hook.
-  subscribe(
-    _userId: string,
-    callback: (notifications: NotificationWithId[]) => void,
-  ): () => void {
-    let active = true;
-    const tick = async () => {
-      if (!active) return;
-      try {
-        const raw = await apiGet<unknown[]>('/v1/notifications');
-        callback(raw.map((r) => fromWire<NotificationWithId>(r)));
-      } catch {
-        /* swallow */
-      }
-      if (active) setTimeout(tick, 5000);
-    };
-    void tick();
-    return () => {
-      active = false;
-    };
+  // The top bar refreshes this on mount, focus, and bell open; it must not
+  // consume the app-worker quota continuously while the page is idle.
+  async list(): Promise<NotificationWithId[]> {
+    const raw = await apiGet<unknown[]>('/v1/notifications');
+    return raw.map((r) => fromWire<NotificationWithId>(r));
   },
 
   async markAsRead(_userId: string, notificationId: string): Promise<void> {

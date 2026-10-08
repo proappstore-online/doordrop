@@ -1110,6 +1110,14 @@
       "requires_auth": true
     },
     {
+      "name": "count_my_unread_campaign_messages",
+      "description": "Number of the caller's campaigns with a message newer than their read state",
+      "operation": "query",
+      "sql": "SELECT COUNT(*) AS unread_count FROM campaigns c WHERE (EXISTS (SELECT 1 FROM json_each(c.admin_ids) a WHERE a.value = :__user_id) OR c.assigned_walker_id = :__user_id) AND EXISTS (SELECT 1 FROM campaign_notes n WHERE n.campaign_id = c.id AND n.created_at > COALESCE((SELECT cr.last_read_at FROM chat_read_state cr WHERE cr.user_id = :__user_id AND cr.campaign_id = c.id), 0))",
+      "params": {},
+      "requires_auth": true
+    },
+    {
       "name": "start_track_session",
       "description": "Assigned walker: start a tracking session on the caller's campaign",
       "operation": "execute",
