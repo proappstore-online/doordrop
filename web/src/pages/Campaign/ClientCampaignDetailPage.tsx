@@ -101,6 +101,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const isAdmin = campaign?.adminIds?.includes(currentUser?.id || "") || false;
   const isAssignedWalker = campaign?.assignedWalkerId === currentUser?.id;
   const campaignClosed = campaign?.status ? isCampaignClosed(campaign.status) : false;
+  const canAddFlyers = campaign?.status && !["assigned", "complete", "review", "payment", "archive"].includes(campaign.status);
 
   const {
     state: trackingState,
@@ -645,6 +646,19 @@ const ClientCampaignDetailPage: React.FC = () => {
                 deliveredCount={deliveredCount}
                 reportedCount={reportedCount}
               />
+            ) : campaign.status === "archive" ? (
+              /* Archived Campaign */
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900/20">
+                <div className="flex gap-4">
+                  <svg className="h-12 w-12 text-slate-400 dark:text-slate-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 3a2 2 0 100-4h12a2 2 0 100 4H4zm0 3h12v10a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm2-2a1 1 0 000 2h8a1 1 0 100-2H6z" />
+                  </svg>
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Campaign Archived</h2>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">This campaign has been archived and is no longer active.</p>
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             {/* Delivery Tracking Panel for Assigned Walker */}
@@ -778,7 +792,7 @@ const ClientCampaignDetailPage: React.FC = () => {
             flyersLoading={printoutManagement.flyersLoading}
             selectedFlyerId={printoutManagement.selectedFlyerId}
             saving={printoutManagement.savingPrintout}
-            isCampaignClosed={campaignClosed}
+            isCampaignClosed={!canAddFlyers}
             error={printoutManagement.printoutError}
             onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
             onNameChange={printoutManagement.setPrintoutName}
