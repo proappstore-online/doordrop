@@ -385,10 +385,11 @@ export function useDeliveryTracking() {
       setStartTime(Date.now());
       prevPositionRef.current = { ...position, t: Math.floor(Date.now() / 1000) };
     } else {
-      setState('out_of_range');
-      stopWatching();
+      // CRITICAL: Initial position out of range — close the session to prevent stale state.
+      // Must call performStop() to end the server session and clear persisted state.
+      performStop('left_area');
     }
-  }, [position, state, stopWatching]);
+  }, [position, state, stopWatching, performStop]);
 
   useEffect(() => {
     if (state === 'active' && startTime) {
@@ -425,6 +426,7 @@ export function useDeliveryTracking() {
       radiusMRef.current = doorRadiusM ?? 100;
       outsideSinceRef.current = null;
       visitedDoorIdsRef.current = new Set();
+      doorRetryCountRef.current.clear();
       onDoorVisitedRef.current = onDoorVisited || null;
 
       setDebugInfo({
@@ -447,6 +449,7 @@ export function useDeliveryTracking() {
       setTrackStops([]);
 
       // Create session via Worker. Replaces Firestore addDoc.
+      // CRITICAL: Do NOT start tracking if session creation fails (prevent orphan sessions)
       if (campaignId) {
         campaignIdRef.current = campaignId;
         try {
@@ -463,24 +466,26 @@ export function useDeliveryTracking() {
             doorRadiusM: doorRadiusM ?? 100,
           });
           console.log(`[Tracking] Session created: ${res.id}`);
+
+          keepActiveRef.current = keepAppActive();
+          console.log('[Tracking] Wake lock and background heartbeat enabled');
+
+          setState('requesting');
+          startWatching();
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           console.error('Failed to create track session:', err);
           setDebugInfo((d) => ({ ...d, sessionCreationError: errorMsg }));
+          // FAIL-SAFE: Do not proceed to 'requesting' state. Stay in 'idle'.
+          // User must retry the delivery start, not continue with orphan session.
         }
       }
-
-      keepActiveRef.current = keepAppActive();
-      console.log('[Tracking] Wake lock and background heartbeat enabled');
-
-      setState('requesting');
-      startWatching();
     },
     [startWatching],
   );
 
   const resumeTracking = useCallback(
-    (
+    async (
       doors: (DoorData & { id?: string })[],
       session: PersistedSession,
       onDoorVisited?: (doorId: string) => void,
@@ -492,7 +497,27 @@ export function useDeliveryTracking() {
       radiusMRef.current = session.doorRadiusM;
       outsideSinceRef.current = null;
       visitedDoorIdsRef.current = new Set();
+      doorRetryCountRef.current.clear();
       onDoorVisitedRef.current = onDoorVisited || null;
+
+      // Reconcile persisted state with server: verify the session still exists.
+      // If the session was already ended or deleted, clear persisted state and return.
+      // This prevents resuming stale or orphaned sessions.
+      try {
+        await apiPost(`/v1/track-sessions/${session.sessionId}/append`, {
+          points: [],
+          stops: [],
+        });
+        console.log(`[Tracking] Verified session is active: ${session.sessionId}`);
+      } catch (err) {
+        console.error('[Tracking] Persisted session is invalid (server rejected append):', err);
+        clearSession();
+        setDebugInfo((d) => ({
+          ...d,
+          sessionCreationError: 'Persisted session no longer valid on server. Start a new delivery.',
+        }));
+        return;
+      }
 
       campaignIdRef.current = session.campaignId;
       sessionIdRef.current = session.sessionId;

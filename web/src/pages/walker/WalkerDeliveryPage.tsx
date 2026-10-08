@@ -135,27 +135,29 @@ const WalkerDeliveryPage: React.FC = () => {
         ...(activePrintoutIdRef.current && { printoutVersionId: activePrintoutIdRef.current }),
       };
 
-      try {
-        await DoorRepository.recordDelivery(campaignId, doorId, event);
-        setDoors((prev) =>
-          prev.map((d) =>
-            d.id === doorId
-              ? {
-                  ...d,
-                  status: "delivered" as const,
-                  deliveredAt: event.date,
-                  deliveredBy: event.deliveredBy,
-                  deliveryCount: (d.deliveryCount || 0) + 1,
-                  history: [...(d.history || []), event],
-                }
-              : d,
-          ),
-        );
-        if (door.propertyId) {
-          PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch(() => {});
-        }
-      } catch (err) {
-        console.error(`Failed to auto-deliver ${doorId}:`, err);
+      // CRITICAL: Do NOT catch the error here. Let it propagate to the tracking hook's retry
+      // handler (useDeliveryTracking.ts line 287-300). If we catch it, the retry logic never
+      // runs and failed delivery records are permanently lost.
+      // Only fire-and-forget operations (property access) should have catch().
+      await DoorRepository.recordDelivery(campaignId, doorId, event);
+
+      // Update local state only after server-side delivery is confirmed
+      setDoors((prev) =>
+        prev.map((d) =>
+          d.id === doorId
+            ? {
+                ...d,
+                status: "delivered" as const,
+                deliveredAt: event.date,
+                deliveredBy: event.deliveredBy,
+                deliveryCount: (d.deliveryCount || 0) + 1,
+                history: [...(d.history || []), event],
+              }
+            : d,
+        ),
+      );
+      if (door.propertyId) {
+        PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch(() => {});
       }
     },
     [campaignId, currentUser],
