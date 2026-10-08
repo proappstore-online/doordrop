@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { FlyerRepository, type CampaignDependency } from "../../repositories/flyerRepository";
 import type { FlyerData } from "../../models/flyer";
@@ -10,6 +11,7 @@ type FlyerWithCampaigns = (FlyerData & { id: string }) & { campaigns?: CampaignD
 
 const FlyersPage: React.FC = () => {
   const { currentUser } = useAuthContext();
+  const navigate = useNavigate();
   const [flyers, setFlyers] = useState<FlyerWithCampaigns[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -534,7 +536,7 @@ const FlyersPage: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="px-4 pb-3 flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                  <div className="px-4 pb-3 flex gap-1 border-t border-gray-200 dark:border-gray-700 pt-3">
                     <button
                       onClick={() => startEdit(f)}
                       className="flex-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 font-medium py-2 rounded transition-colors"
@@ -542,6 +544,15 @@ const FlyersPage: React.FC = () => {
                     >
                       Edit
                     </button>
+                    {!f.archivedAt && (
+                      <button
+                        onClick={() => navigate(`/app/setup?flyerId=${f.id}`)}
+                        className="flex-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 font-medium py-2 rounded transition-colors"
+                        aria-label={`Use ${f.name} in a campaign`}
+                      >
+                        Use
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(f.id)}
                       disabled={deletingId === f.id}

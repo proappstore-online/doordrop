@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { FlyerRepository, type FlyerWithId } from "../../../repositories/flyerRepository";
 import { uploadFile as uploadFlyer } from "../../../utils/storageUpload";
 import type { CampaignData } from "../../../models/campaign";
@@ -13,6 +14,7 @@ interface FlyerStepProps {
 type SelectionMode = "library" | "upload" | "none";
 
 const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, isLoading = false }) => {
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<SelectionMode>("none");
   const [flyers, setFlyers] = useState<FlyerWithId[]>([]);
   const [flyersLoading, setFlyersLoading] = useState(false);
@@ -35,6 +37,12 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
         const data = await FlyerRepository.getFlyers(currentUserId);
         const activeFlyers = data.filter((f) => !f.archivedAt);
         setFlyers(activeFlyers);
+
+        // Auto-select flyer from URL params if present
+        const flyerId = searchParams.get("flyerId");
+        if (flyerId && activeFlyers.some((f) => f.id === flyerId)) {
+          setSelectedLibraryId(flyerId);
+        }
       } catch (err) {
         console.error("Failed to load flyers:", err);
         setError("Failed to load your flyer library. Please try again.");
@@ -44,7 +52,7 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
     };
 
     void loadFlyers();
-  }, [mode, currentUserId]);
+  }, [mode, currentUserId, searchParams]);
 
   const handleSelectLibrary = (flyerId: string) => {
     setSelectedLibraryId(flyerId);
@@ -81,6 +89,22 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
     if (uploadPreview) URL.revokeObjectURL(uploadPreview);
     setUploadFile(file);
     setUploadPreview(file ? URL.createObjectURL(file) : null);
+    setError(null);
+  };
+
+  const validateFile = (file: File): string | null => {
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+    const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg"];
+
+    if (file.size > MAX_SIZE) {
+      return "File too large. Maximum size is 10 MB.";
+    }
+
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      return "Invalid file type. Please upload a PDF, PNG, or JPG.";
+    }
+
+    return null;
   };
 
   const handleUploadFlyer = async () => {
@@ -92,6 +116,13 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
       setError("Please select an image file");
       return;
     }
+
+    const validationError = validateFile(uploadFile);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     if (!currentUserId) {
       setError("User ID not available");
       return;
@@ -119,7 +150,7 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
       setMode("none");
     } catch (err) {
       console.error("Failed to upload flyer:", err);
-      setError("Failed to upload flyer. Please try again.");
+      setError("Upload failed. Please check your connection and try again.");
     } finally {
       setUploadSaving(false);
     }
@@ -274,11 +305,12 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
             <input
               id="upload-file"
               type="file"
-              accept="image/*"
+              accept="application/pdf,image/png,image/jpeg"
               onChange={handleUploadFile}
               disabled={uploadSaving}
               className="text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/30 dark:file:text-blue-300 hover:file:bg-blue-100 disabled:opacity-50"
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">PDF, PNG or JPG · max 10 MB</p>
           </div>
 
           <div className="flex gap-2 border-t pt-3">
