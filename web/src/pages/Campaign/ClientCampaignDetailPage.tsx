@@ -662,6 +662,9 @@ const ClientCampaignDetailPage: React.FC = () => {
           printoutDesc={printoutManagement.printoutDesc}
           printoutFile={printoutManagement.printoutFile}
           printoutFilePreview={printoutManagement.printoutFilePreview}
+          flyers={printoutManagement.flyers}
+          flyersLoading={printoutManagement.flyersLoading}
+          selectedFlyerId={printoutManagement.selectedFlyerId}
           saving={printoutManagement.savingPrintout}
           isCampaignClosed={isCampaignClosed}
           onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
@@ -671,6 +674,7 @@ const ClientCampaignDetailPage: React.FC = () => {
             printoutManagement.setPrintoutFile(file);
             printoutManagement.setPrintoutFilePreview(preview);
           }}
+          onFlyerSelect={printoutManagement.selectFlyer}
           onSubmit={printoutManagement.handleCreatePrintout}
           onCancel={() => printoutManagement.setShowPrintoutForm(false)}
         />

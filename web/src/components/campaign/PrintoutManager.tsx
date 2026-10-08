@@ -1,5 +1,6 @@
 import React from "react";
 import type { PrintoutData } from "../../models/printout";
+import type { FlyerWithId } from "../../repositories/flyerRepository";
 
 interface PrintoutManagerProps {
   printouts: (PrintoutData & { id: string })[];
@@ -8,12 +9,16 @@ interface PrintoutManagerProps {
   printoutDesc: string;
   printoutFile: File | null;
   printoutFilePreview: string | null;
+  flyers: FlyerWithId[];
+  flyersLoading: boolean;
+  selectedFlyerId: string;
   saving: boolean;
   isCampaignClosed: boolean;
   onToggleForm: () => void;
   onNameChange: (value: string) => void;
   onDescChange: (value: string) => void;
   onFileChange: (file: File | null, preview: string | null) => void;
+  onFlyerSelect: (flyerId: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
 }
@@ -25,19 +30,26 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
   printoutDesc,
   printoutFile: _printoutFile,
   printoutFilePreview,
+  flyers,
+  flyersLoading,
+  selectedFlyerId,
   saving,
   isCampaignClosed,
   onToggleForm,
   onNameChange,
   onDescChange,
   onFileChange,
+  onFlyerSelect,
   onSubmit,
   onCancel,
 }) => {
+  const selectedFlyer = flyers.find((flyer) => flyer.id === selectedFlyerId);
+
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     if (printoutFilePreview) URL.revokeObjectURL(printoutFilePreview);
     const preview = file ? URL.createObjectURL(file) : null;
+    onFlyerSelect("");
     onFileChange(file, preview);
   };
 
@@ -60,6 +72,36 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
       {showForm && (
         <form onSubmit={onSubmit} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 mb-4 space-y-4">
           <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Reuse a saved flyer <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <select
+              value={selectedFlyerId}
+              onChange={(e) => onFlyerSelect(e.target.value)}
+              disabled={flyersLoading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">{flyersLoading ? "Loading your flyer library..." : "Upload a new flyer instead"}</option>
+              {flyers.map((flyer) => (
+                <option key={flyer.id} value={flyer.id}>{flyer.name}</option>
+              ))}
+            </select>
+            {!flyersLoading && flyers.length === 0 && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">No saved flyers yet. Upload one below, or add flyers from the Flyers page.</p>
+            )}
+            {selectedFlyer && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/60 dark:bg-emerald-900/20">
+                {selectedFlyer.fileUrl && (
+                  <img src={selectedFlyer.fileUrl} alt={selectedFlyer.name} className="h-14 w-14 rounded object-cover" />
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Using “{selectedFlyer.name}” from your library</p>
+                  <p className="text-xs text-emerald-800 dark:text-emerald-200">Its name, notes, and image will be copied into this campaign.</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Flyer name</label>
             <input
               type="text"
@@ -80,7 +122,9 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upload image</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Upload image {selectedFlyer && <span className="text-gray-400 font-normal">(choose a file to use a new flyer instead)</span>}
+            </label>
             {printoutFilePreview && (
               <img src={printoutFilePreview} alt="Preview" className="w-32 h-32 object-cover rounded-md mb-2" />
             )}
@@ -124,6 +168,9 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
                   </span>
                   {p.description && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">{p.description}</p>
+                  )}
+                  {p.flyerId && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300">From your flyer library</p>
                   )}
                 </div>
               </div>

@@ -2,7 +2,7 @@ import type { FlyerData } from '../models/flyer';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../lib/api';
 import { fromWire, toWire } from '../lib/transform';
 
-type FlyerWithId = FlyerData & { id: string };
+export type FlyerWithId = FlyerData & { id: string };
 
 export const FlyerRepository = {
   async getFlyers(userId: string): Promise<FlyerWithId[]> {

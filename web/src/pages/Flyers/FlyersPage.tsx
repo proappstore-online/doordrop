@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { FlyerRepository } from "../../repositories/flyerRepository";
 import type { FlyerData } from "../../models/flyer";
 import { uploadFile } from "../../utils/storageUpload";
 
+type Feedback = { type: "success" | "error"; message: string };
+
 const FlyersPage: React.FC = () => {
   const { currentUser } = useAuthContext();
   const [flyers, setFlyers] = useState<(FlyerData & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   // Create form
   const [showForm, setShowForm] = useState(false);
@@ -27,25 +31,34 @@ const FlyersPage: React.FC = () => {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await FlyerRepository.getFlyers(currentUser.id);
-        setFlyers(data);
-      } catch (err) {
-        console.error("Failed to load flyers:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const loadFlyers = useCallback(async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await FlyerRepository.getFlyers(currentUser.id);
+      setFlyers(data);
+    } catch (err) {
+      console.error("Failed to load flyers:", err);
+      // Keep any already-loaded flyers in memory. A failed refresh is not an empty library.
+      setLoadError("We couldn’t load your flyers. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }, [currentUser]);
+
+  useEffect(() => {
+    void loadFlyers();
+  }, [loadFlyers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !name.trim()) return;
+    setFeedback(null);
     setSaving(true);
     try {
       let fileUrl: string | undefined;
@@ -53,22 +66,28 @@ const FlyersPage: React.FC = () => {
         const ext = file.name.split(".").pop() || "jpg";
         fileUrl = await uploadFile(`users/${currentUser.id}/flyers/${Date.now()}.${ext}`, file);
       }
-      await FlyerRepository.createFlyer(currentUser.id, {
+      const newFlyer: FlyerData = {
         name: name.trim(),
         description: description.trim() || undefined,
         fileUrl,
         createdAt: new Date(),
         createdBy: currentUser.id,
-      });
-      setFlyers(await FlyerRepository.getFlyers(currentUser.id));
+      };
+      const id = await FlyerRepository.createFlyer(currentUser.id, newFlyer);
+      setFlyers((previous) => [{ ...newFlyer, id }, ...previous]);
       setName("");
       setDescription("");
       if (filePreview) URL.revokeObjectURL(filePreview);
       setFile(null);
       setFilePreview(null);
       setShowForm(false);
+      setFeedback({ type: "success", message: "Flyer saved to your library." });
     } catch (err) {
       console.error("Failed to create flyer:", err);
+      setFeedback({
+        type: "error",
+        message: "We couldn’t save this flyer. Your details and selected file are still here—please try again.",
+      });
     } finally {
       setSaving(false);
     }
@@ -91,7 +110,8 @@ const FlyersPage: React.FC = () => {
   };
 
   const handleUpdate = async (flyerId: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !editName.trim()) return;
+    setFeedback(null);
     setEditSaving(true);
     try {
       const updates: Partial<Pick<FlyerData, "name" | "description" | "fileUrl">> = {
@@ -103,10 +123,17 @@ const FlyersPage: React.FC = () => {
         updates.fileUrl = await uploadFile(`users/${currentUser.id}/flyers/${Date.now()}.${ext}`, editFile);
       }
       await FlyerRepository.updateFlyer(currentUser.id, flyerId, updates);
-      setFlyers(await FlyerRepository.getFlyers(currentUser.id));
+      setFlyers((previous) => previous.map((flyer) => (
+        flyer.id === flyerId ? { ...flyer, ...updates } : flyer
+      )));
       cancelEdit();
+      setFeedback({ type: "success", message: "Flyer changes saved." });
     } catch (err) {
       console.error("Failed to update flyer:", err);
+      setFeedback({
+        type: "error",
+        message: "We couldn’t save your changes. Your edits and selected file are still here—please try again.",
+      });
     } finally {
       setEditSaving(false);
     }
@@ -114,24 +141,19 @@ const FlyersPage: React.FC = () => {
 
   const handleDelete = async (flyerId: string) => {
     if (!currentUser || !confirm("Remove this flyer from your library?")) return;
+    setFeedback(null);
     setDeletingId(flyerId);
     try {
       await FlyerRepository.deleteFlyer(currentUser.id, flyerId);
       setFlyers((prev) => prev.filter((f) => f.id !== flyerId));
+      setFeedback({ type: "success", message: "Flyer removed from your library." });
     } catch (err) {
       console.error("Failed to delete flyer:", err);
+      setFeedback({ type: "error", message: "We couldn’t remove this flyer. Please try again." });
     } finally {
       setDeletingId(null);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-6">
@@ -144,13 +166,48 @@ const FlyersPage: React.FC = () => {
         </div>
         {!showForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setFeedback(null);
+              setShowForm(true);
+            }}
             className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
           >
             + Add Flyer
           </button>
         )}
       </div>
+
+      {feedback && (
+        <div
+          role={feedback.type === "error" ? "alert" : "status"}
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            feedback.type === "error"
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-12" role="status" aria-label="Loading flyers">
+          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : loadError ? (
+        <section className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900/60 dark:bg-red-950/20">
+          <p className="font-medium text-red-900 dark:text-red-200">Unable to load flyers</p>
+          <p className="mt-1 text-sm text-red-800 dark:text-red-300">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => void loadFlyers()}
+            className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-800"
+          >
+            Try again
+          </button>
+        </section>
+      ) : (
+        <>
 
       {/* Create form */}
       {showForm && (
@@ -159,6 +216,7 @@ const FlyersPage: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Flyer name</label>
             <input
               type="text"
+              required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Summer Sale, Grand Opening..."
@@ -229,7 +287,10 @@ const FlyersPage: React.FC = () => {
             Upload your flyer designs here and use them in any campaign.
           </p>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setFeedback(null);
+              setShowForm(true);
+            }}
             className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
           >
             Upload your first flyer
@@ -344,6 +405,8 @@ const FlyersPage: React.FC = () => {
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );
