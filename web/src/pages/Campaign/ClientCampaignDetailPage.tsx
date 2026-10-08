@@ -68,6 +68,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   } = useCampaignData(campaignId, currentUser?.id);
 
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const [editBudget, setEditBudget] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
@@ -200,12 +201,14 @@ const ClientCampaignDetailPage: React.FC = () => {
     e.preventDefault();
     if (!campaignId || !currentUser || !noteInput.trim()) return;
     setNoteLoading(true);
+    setMutationError(null);
     try {
       const userName = userData?.name || currentUser.login || "Unknown";
       await CampaignNoteRepository.addNote(campaignId, noteInput.trim(), userName, currentUser.id);
       setNoteInput("");
     } catch (err) {
       console.error("Failed to add note:", err);
+      setMutationError("We couldn't add your note. Please try again.");
     } finally {
       setNoteLoading(false);
     }
@@ -237,6 +240,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const handleStatusChange = async (newStatus: CampaignStatus) => {
     if (!campaignId || !isAdmin) return;
     setStatusUpdating(true);
+    setMutationError(null);
     try {
       const updates: Partial<CampaignData> = { status: newStatus };
       if (newStatus === "complete") updates.completedAt = new Date();
@@ -254,6 +258,7 @@ const ClientCampaignDetailPage: React.FC = () => {
       }
     } catch (err) {
       console.error("Failed to update status:", err);
+      setMutationError("We couldn't update the campaign status. Please try again.");
     } finally {
       setStatusUpdating(false);
     }
@@ -262,6 +267,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const handleSaveDetails = async () => {
     if (!campaignId || !isAdmin) return;
     setSavingDetails(true);
+    setMutationError(null);
     try {
       const updates: Partial<CampaignData> = {};
       const budgetNum = parseFloat(editBudget);
@@ -276,6 +282,7 @@ const ClientCampaignDetailPage: React.FC = () => {
       setCampaign((prev) => (prev ? { ...prev, ...updates } : prev));
     } catch (err) {
       console.error("Failed to save details:", err);
+      setMutationError("We couldn't save your changes. Your details have been kept—please try again.");
     } finally {
       setSavingDetails(false);
     }
@@ -284,6 +291,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const handlePublish = async () => {
     if (!campaignId || !isAdmin) return;
     setStatusUpdating(true);
+    setMutationError(null);
     try {
       const budgetNum = parseFloat(editBudget);
       const updates: Partial<CampaignData> = {
@@ -301,6 +309,7 @@ const ClientCampaignDetailPage: React.FC = () => {
       setCampaign((prev) => (prev ? { ...prev, ...updates } : prev));
     } catch (err) {
       console.error("Failed to publish campaign:", err);
+      setMutationError("We couldn't publish your campaign. Your changes have been kept—please try again.");
     } finally {
       setStatusUpdating(false);
     }
@@ -509,6 +518,37 @@ const ClientCampaignDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
+      {mutationError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
+        >
+          <div className="flex gap-3">
+            <svg
+              className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div className="flex-1">
+              <p>{mutationError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMutationError(null)}
+              className="flex-shrink-0 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <CampaignTabs
         campaignId={campaignId!}
         campaignName={campaign.name}

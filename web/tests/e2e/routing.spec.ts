@@ -1175,3 +1175,241 @@ test.describe('Campaign creation', () => {
     await expect(page.getByText('Suburb is required')).not.toBeVisible();
   });
 });
+
+// Flyer library: loading, saving, updating, deleting with error handling
+test.describe('Flyer library error handling', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.addCookies([
+      {
+        name: '__Host-pas-session',
+        value: 'mock-session-token',
+        domain: 'localhost',
+        path: '/',
+        secure: false,
+        httpOnly: true,
+      },
+    ]);
+
+    await page.route('**/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          user: { id: 'flyer-user-123', role: 'client', name: 'Test Client' },
+          needsRoleSelection: false,
+        }),
+      }),
+    );
+  });
+
+  test('failed flyer list load shows error, not empty state', async ({ page }) => {
+    // Mock flyer list failure
+    await page.route('**/v1/flyers', (route) =>
+      route.fulfill({
+        status: 500,
+        body: '{"error":"server error"}',
+      }),
+    );
+
+    await page.goto('/app/flyers');
+
+    // Wait for loading to finish
+    await page.waitForLoadState('networkidle');
+
+    // Verify error is shown instead of "No flyers yet"
+    await expect(page.getByText('Unable to load flyers')).toBeVisible();
+    await expect(page.getByText(/couldn\'t load your flyers/i)).toBeVisible();
+    await expect(page.getByText(/no flyers yet/i)).not.toBeVisible();
+
+    // Verify retry button is available
+    await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
+  });
+
+  test('retry button on flyer load failure', async ({ page }) => {
+    let retryCount = 0;
+
+    // First request fails, second succeeds
+    await page.route('**/v1/flyers', (route) => {
+      retryCount++;
+      if (retryCount === 1) {
+        return route.fulfill({
+          status: 500,
+          body: '{"error":"server error"}',
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        body: JSON.stringify([{ id: 'flyer1', name: 'Test Flyer', createdAt: Date.now() }]),
+      });
+    });
+
+    await page.goto('/app/flyers');
+    await page.waitForLoadState('networkidle');
+
+    // Error is shown
+    await expect(page.getByText('Unable to load flyers')).toBeVisible();
+
+    // Click retry
+    await page.click('button:has-text("Try again")');
+    await page.waitForLoadState('networkidle');
+
+    // Error should be gone, flyer should load
+    await expect(page.getByText('Unable to load flyers')).not.toBeVisible();
+    await expect(page.getByText('Test Flyer')).toBeVisible();
+  });
+
+  test('flyer upload failure preserves form state', async ({ page }) => {
+    // Mock initial flyer list load (empty)
+    await page.route('**/v1/flyers', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([]),
+      }),
+    );
+
+    // Mock upload failure
+    let uploadAttempts = 0;
+    await page.route('**/v1/flyers', async (route) => {
+      if (route.request().method() === 'POST') {
+        uploadAttempts++;
+        return route.fulfill({
+          status: 500,
+          body: '{"error":"upload failed"}',
+        });
+      }
+      return route.fallthrough();
+    });
+
+    await page.goto('/app/flyers');
+
+    // Open form and fill fields
+    await page.click('button:has-text("Add Flyer")');
+
+    const name = 'Test Flyer Upload';
+    const description = 'Test description for upload failure';
+
+    await page.fill('input[placeholder="e.g. Summer Sale"]', name);
+    await page.fill('input[placeholder="Any details about this flyer"]', description);
+
+    // Upload file
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: 'test.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('fake-png-data'),
+    });
+
+    // Submit form (will fail)
+    await page.click('button:has-text("Save Flyer")');
+
+    // Wait for error
+    await page.waitForTimeout(500);
+
+    // Verify error message is shown
+    await expect(page.getByText(/couldn\'t save this flyer/i)).toBeVisible();
+
+    // Verify form state is preserved
+    await expect(page.locator('input[placeholder="e.g. Summer Sale"]')).toHaveValue(name);
+    await expect(page.locator('input[placeholder="Any details about this flyer"]')).toHaveValue(
+      description,
+    );
+
+    // File preview should still be visible
+    await expect(page.locator('img[alt="Preview"]')).toBeVisible();
+  });
+
+  test('flyer delete failure shows error', async ({ page }) => {
+    // Mock flyer list with one flyer
+    await page.route('**/v1/flyers', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          body: JSON.stringify([
+            { id: 'flyer1', name: 'Flyer 1', createdAt: Date.now(), fileUrl: 'http://example.com/flyer1.png' },
+          ]),
+        });
+      }
+      // Mock delete failure
+      if (route.request().method() === 'DELETE') {
+        return route.fulfill({
+          status: 500,
+          body: '{"error":"delete failed"}',
+        });
+      }
+      return route.fallthrough();
+    });
+
+    await page.goto('/app/flyers');
+    await page.waitForLoadState('networkidle');
+
+    // Hover to show delete button
+    await page.hover('text=Flyer 1');
+
+    // Mock confirm dialog
+    page.once('dialog', (dialog) => {
+      void dialog.accept();
+    });
+
+    // Click delete
+    await page.click('button:has-text("Delete")');
+
+    // Wait for error feedback
+    await page.waitForTimeout(500);
+
+    // Verify error is shown
+    await expect(page.getByText(/couldn\'t remove this flyer/i)).toBeVisible();
+
+    // Flyer should still be in list
+    await expect(page.getByText('Flyer 1')).toBeVisible();
+  });
+
+  test('button cannot be double-submitted during flyer creation', async ({ page }) => {
+    let uploadCount = 0;
+
+    await page.route('**/v1/flyers', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          body: JSON.stringify([]),
+        });
+      }
+      if (route.request().method() === 'POST') {
+        uploadCount++;
+        // Simulate slow upload
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(
+              route.fulfill({
+                status: 201,
+                body: JSON.stringify({ id: `flyer${uploadCount}`, name: 'Test Flyer' }),
+              }),
+            );
+          }, 1000);
+        });
+      }
+      return route.fallthrough();
+    });
+
+    await page.goto('/app/flyers');
+
+    await page.click('button:has-text("Add Flyer")');
+    await page.fill('input[placeholder="e.g. Summer Sale"]', 'My Flyer');
+
+    const submitButton = page.locator('button:has-text("Save Flyer")');
+
+    // Click save button
+    await submitButton.click();
+
+    // Button should be disabled immediately
+    await expect(submitButton).toBeDisabled();
+
+    // Try clicking again (should be ignored)
+    await submitButton.click();
+    await submitButton.click();
+
+    // Wait for request to complete
+    await page.waitForLoadState('networkidle');
+
+    // Only one upload should have occurred
+    expect(uploadCount).toBe(1);
+  });
+});
