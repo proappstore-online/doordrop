@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { campaignAccess, requireCampaignAdmin, requireCampaignParticipant } from '../auth.js';
+import { campaignAccess, requireCampaignAdmin, requireCampaignParticipant, requireActiveCampaign } from '../auth.js';
 import { batch, rows, run, type AppEnv, type Row } from '../pas.js';
 import { fromJson, newId, pickDefined } from '../lib.js';
 
@@ -63,6 +63,9 @@ const WALKER_ALLOWED = ['status', 'delivered_at', 'delivered_by', 'delivery_coun
 router.patch('/campaigns/:campaignId/doors/:doorId', async (c) => {
   const campaignId = c.req.param('campaignId');
   const doorId = c.req.param('doorId');
+
+  // Delivery writes only allowed in active campaigns (ready or assigned)
+  await requireActiveCampaign(c, campaignId);
 
   // Authz: campaign-admin can update any field; assigned-walker only the delivery allow-list.
   const access = await campaignAccess(c, campaignId);

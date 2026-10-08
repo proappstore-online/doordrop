@@ -85,3 +85,19 @@ export async function requireCampaignParticipant(c: Ctx, campaignId: string): Pr
   }
   return access;
 }
+
+export interface CampaignStatus {
+  status: string;
+}
+
+export function campaignStatus(c: Ctx, campaignId: string): Promise<CampaignStatus | null> {
+  return first<CampaignStatus>(c, 'get_campaign_status', { id: campaignId });
+}
+
+export async function requireActiveCampaign(c: Ctx, campaignId: string): Promise<void> {
+  const campaign = await campaignStatus(c, campaignId);
+  if (!campaign) throw new HTTPException(404, { message: 'campaign not found' });
+  if (campaign.status !== 'ready' && campaign.status !== 'assigned') {
+    throw new HTTPException(409, { message: 'campaign is not active' });
+  }
+}

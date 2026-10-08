@@ -567,4 +567,169 @@ describe('admin area', () => {
     expect(row('SELECT status, job_status FROM campaigns WHERE id = ?', campaignId)).toEqual({ status: 'complete', job_status: 'completed' });
     expect(row('SELECT completed_at FROM campaigns WHERE id = ?', campaignId).completed_at).toBeGreaterThan(0);
   });
+
+  describe('delivery and tracking writes blocked in closed campaign states', () => {
+    let testCampaignId: string;
+    let testDoorId: string;
+    let testSessionId: string;
+
+    beforeEach(async () => {
+      // Set up a campaign in 'assigned' status with assigned walker
+      const created = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Lifecycle test campaign' });
+      testCampaignId = created.body.id;
+      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, {
+        assigned_walker_id: WALKER_1,
+        status: 'assigned',
+      });
+
+      // Create a test door
+      const door = await req(CLIENT_1, 'POST', `/v1/campaigns/${testCampaignId}/doors`, { address: '123 Test St' });
+      testDoorId = door.body.id;
+
+      // Create a test tracking session
+      const session = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
+      testSessionId = session.body.id;
+    });
+
+    async function testClosedStatus(status: string) {
+      // Transition campaign to the closed status
+      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, { status });
+
+      // Test: assigned walker cannot patch doors in closed campaign
+      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
+        status: 'delivered',
+        delivered_at: Date.now(),
+        delivered_by: WALKER_1,
+      });
+      expect(patchDoor.status).toBe(409);
+      expect(patchDoor.body).toMatchObject({ error: 'campaign is not active' });
+
+      // Test: direct action call also fails
+      const directPatch = await direct(WALKER_1, 'update_door_as_walker', {
+        id: testDoorId,
+        campaign_id: testCampaignId,
+        patch: JSON.stringify({ status: 'delivered', delivered_by: WALKER_1 }),
+      });
+      expect(directPatch.meta.changes).toBe(0);
+
+      // Test: assigned walker cannot start new track session in closed campaign
+      const newSession = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
+      expect(newSession.status).toBe(409);
+      expect(newSession.body).toMatchObject({ error: 'campaign is not active' });
+
+      // Test: direct action for start_track_session also fails
+      const directStartSession = await direct(WALKER_1, 'start_track_session', {
+        id: `session-${status}`,
+        campaign_id: testCampaignId,
+      });
+      expect(directStartSession.meta.changes).toBe(0);
+
+      // Test: cannot append track point in closed campaign
+      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
+        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
+      });
+      expect(appendPoint.status).toBe(409);
+      expect(appendPoint.body).toMatchObject({ error: 'campaign is not active' });
+
+      // Test: direct action for append_track_point also fails
+      const directAppendPoint = await direct(WALKER_1, 'append_track_point', {
+        session_id: testSessionId,
+        t: Date.now(),
+        lat: -37.8,
+        lng: 144.9,
+      });
+      expect(directAppendPoint.meta.changes).toBe(0);
+
+      // Test: cannot append track stop in closed campaign
+      const appendStop = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
+        stops: [{ lat: -37.8, lng: 144.9, startTime: Date.now(), endTime: Date.now() + 60000 }],
+      });
+      expect(appendStop.status).toBe(409);
+      expect(appendStop.body).toMatchObject({ error: 'campaign is not active' });
+
+      // Test: direct action for append_track_stop also fails
+      const directAppendStop = await direct(WALKER_1, 'append_track_stop', {
+        session_id: testSessionId,
+        lat: -37.8,
+        lng: 144.9,
+        start_time: Date.now(),
+        end_time: Date.now() + 60000,
+      });
+      expect(directAppendStop.meta.changes).toBe(0);
+
+      // Test: cannot end track session in closed campaign
+      const endSession = await req(WALKER_1, 'PATCH', `/v1/track-sessions/${testSessionId}`, {
+        ended_at: Date.now(),
+      });
+      expect(endSession.status).toBe(409);
+      expect(endSession.body).toMatchObject({ error: 'campaign is not active' });
+
+      // Test: direct action for end_track_session also fails
+      const directEndSession = await direct(WALKER_1, 'end_track_session', {
+        id: testSessionId,
+        ended_at: Date.now(),
+      });
+      expect(directEndSession.meta.changes).toBe(0);
+    }
+
+    it('blocks delivery writes in complete status', async () => {
+      await testClosedStatus('complete');
+    });
+
+    it('blocks delivery writes in review status', async () => {
+      await testClosedStatus('review');
+    });
+
+    it('blocks delivery writes in payment status', async () => {
+      await testClosedStatus('payment');
+    });
+
+    it('blocks delivery writes in archive status', async () => {
+      await testClosedStatus('archive');
+    });
+
+    it('allows delivery writes in ready status', async () => {
+      // This campaign is already in 'assigned' status, transition it to 'ready'
+      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, { status: 'ready' });
+
+      // Should succeed: walker can patch door
+      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
+        status: 'delivered',
+        delivered_at: Date.now(),
+        delivered_by: WALKER_1,
+      });
+      expect(patchDoor.status).toBe(200);
+      expect(patchDoor.body).toEqual({ ok: true });
+
+      // Should succeed: walker can append track point
+      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
+        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
+      });
+      expect(appendPoint.status).toBe(200);
+    });
+
+    it('allows delivery writes in assigned status', async () => {
+      // Campaign is already in 'assigned' status
+
+      // Should succeed: walker can patch door
+      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
+        status: 'delivered',
+        delivered_at: Date.now(),
+        delivered_by: WALKER_1,
+      });
+      expect(patchDoor.status).toBe(200);
+      expect(patchDoor.body).toEqual({ ok: true });
+
+      // Should succeed: walker can start new track session
+      const newSession = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
+      expect(newSession.status).toBe(201);
+      expect(newSession.body).toHaveProperty('id');
+
+      // Should succeed: walker can append track point
+      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
+        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
+      });
+      expect(appendPoint.status).toBe(200);
+    });
+  });
 });

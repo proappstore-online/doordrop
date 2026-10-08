@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { campaignAccess, requireAssignedWalker } from '../auth.js';
+import { campaignAccess, requireAssignedWalker, requireActiveCampaign } from '../auth.js';
 import { batch, first, rows, run, type AppEnv, type Ctx, type Params } from '../pas.js';
 import { newId } from '../lib.js';
 
@@ -21,6 +21,7 @@ async function requireSessionOwner(c: Ctx, sessionId: string): Promise<void> {
 // POST /campaigns/:campaignId/track-sessions — start a new tracking session (assigned-walker)
 router.post('/campaigns/:campaignId/track-sessions', async (c) => {
   const campaignId = c.req.param('campaignId');
+  await requireActiveCampaign(c, campaignId);
   await requireAssignedWalker(c, campaignId);
   const id = newId();
   await run(c, 'start_track_session', { id, campaign_id: campaignId });
@@ -43,6 +44,12 @@ router.get('/campaigns/:campaignId/track-sessions', async (c) => {
 router.post('/track-sessions/:id/append', async (c) => {
   const sessionId = c.req.param('id');
   await requireSessionOwner(c, sessionId);
+  const access = await sessionAccess(c, sessionId);
+  if (!access) throw new HTTPException(404, { message: 'session not found' });
+  // Check campaign status through the session
+  const session = await first<{ campaign_id: string }>(c, 'get_track_session', { id: sessionId });
+  if (!session) throw new HTTPException(404, { message: 'session not found' });
+  await requireActiveCampaign(c, session.campaign_id);
   const body = await c.req.json<{
     points?: Array<{ t: number; lat: number; lng: number; speed?: number }>;
     stops?: Array<{ lat: number; lng: number; startTime: number; endTime: number }>;
@@ -69,6 +76,9 @@ router.post('/track-sessions/:id/append', async (c) => {
 router.patch('/track-sessions/:id', async (c) => {
   const sessionId = c.req.param('id');
   await requireSessionOwner(c, sessionId);
+  const session = await first<{ campaign_id: string }>(c, 'get_track_session', { id: sessionId });
+  if (!session) throw new HTTPException(404, { message: 'session not found' });
+  await requireActiveCampaign(c, session.campaign_id);
   const body = await c.req.json<{ ended_at?: number }>();
   if (typeof body.ended_at !== 'number') {
     throw new HTTPException(400, { message: 'ended_at required' });

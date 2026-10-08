@@ -193,6 +193,23 @@
       "requires_auth": true
     },
     {
+      "name": "get_campaign_status",
+      "description": "Get campaign status only (for delivery lifecycle checks)",
+      "operation": "query",
+      "sql": "SELECT status FROM campaigns WHERE id = :id",
+      "params": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true,
+      "auth": {
+        "caller_unscoped": {
+          "reason": "Used internally by worker routes for lifecycle checks; authorization enforced at the route layer"
+        }
+      }
+    },
+    {
       "name": "create_campaign",
       "description": "Create a campaign; the caller must be a client or admin and one of its admin_ids",
       "operation": "execute",
@@ -434,7 +451,7 @@
       "name": "update_door_as_walker",
       "description": "Assigned walker: record a door's delivery; delivered_by can only be the caller",
       "operation": "execute",
-      "sql": "UPDATE doors SET status = CASE WHEN json_type(:patch, '$.status') IS NULL THEN status ELSE json_extract(:patch, '$.status') END, delivered_at = CASE WHEN json_type(:patch, '$.delivered_at') IS NULL THEN delivered_at ELSE json_extract(:patch, '$.delivered_at') END, delivered_by = CASE WHEN json_type(:patch, '$.delivered_by') IS NULL THEN delivered_by ELSE json_extract(:patch, '$.delivered_by') END, delivery_count = CASE WHEN json_type(:patch, '$.delivery_count') IS NULL THEN delivery_count ELSE json_extract(:patch, '$.delivery_count') END, history = CASE WHEN json_type(:patch, '$.history') IS NULL THEN history ELSE json_extract(:patch, '$.history') END WHERE id = :id AND campaign_id = :campaign_id AND (json_type(:patch, '$.delivered_by') IS NULL OR json_extract(:patch, '$.delivered_by') = :__user_id) AND EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)",
+      "sql": "UPDATE doors SET status = CASE WHEN json_type(:patch, '$.status') IS NULL THEN status ELSE json_extract(:patch, '$.status') END, delivered_at = CASE WHEN json_type(:patch, '$.delivered_at') IS NULL THEN delivered_at ELSE json_extract(:patch, '$.delivered_at') END, delivered_by = CASE WHEN json_type(:patch, '$.delivered_by') IS NULL THEN delivered_by ELSE json_extract(:patch, '$.delivered_by') END, delivery_count = CASE WHEN json_type(:patch, '$.delivery_count') IS NULL THEN delivery_count ELSE json_extract(:patch, '$.delivery_count') END, history = CASE WHEN json_type(:patch, '$.history') IS NULL THEN history ELSE json_extract(:patch, '$.history') END WHERE id = :id AND campaign_id = :campaign_id AND (json_type(:patch, '$.delivered_by') IS NULL OR json_extract(:patch, '$.delivered_by') = :__user_id) AND EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id AND cw.status IN ('ready','assigned'))",
       "params": {
         "id": {
           "type": "string"
@@ -1060,7 +1077,7 @@
       "name": "start_track_session",
       "description": "Assigned walker: start a tracking session on the caller's campaign",
       "operation": "execute",
-      "sql": "INSERT INTO track_sessions (id, campaign_id, walker_id, started_at, ended_at) SELECT :id, :campaign_id, :__user_id, :__now, NULL WHERE EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)",
+      "sql": "INSERT INTO track_sessions (id, campaign_id, walker_id, started_at, ended_at) SELECT :id, :campaign_id, :__user_id, :__now, NULL WHERE EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id AND cw.status IN ('ready','assigned'))",
       "params": {
         "id": {
           "type": "string"
@@ -1099,7 +1116,7 @@
       "name": "append_track_point",
       "description": "Append a GPS point to the caller's own tracking session",
       "operation": "execute",
-      "sql": "INSERT OR IGNORE INTO track_points (session_id, t, lat, lng, speed) SELECT :session_id, :t, :lat, :lng, :speed WHERE EXISTS (SELECT 1 FROM track_sessions s WHERE s.id = :session_id AND s.walker_id = :__user_id)",
+      "sql": "INSERT OR IGNORE INTO track_points (session_id, t, lat, lng, speed) SELECT :session_id, :t, :lat, :lng, :speed WHERE EXISTS (SELECT 1 FROM track_sessions s, campaigns c WHERE s.id = :session_id AND s.walker_id = :__user_id AND c.id = s.campaign_id AND c.status IN ('ready','assigned'))",
       "params": {
         "session_id": {
           "type": "string"
@@ -1124,7 +1141,7 @@
       "name": "append_track_stop",
       "description": "Append a stop to the caller's own tracking session",
       "operation": "execute",
-      "sql": "INSERT INTO track_stops (id, session_id, lat, lng, start_time, end_time) SELECT :__uuid, :session_id, :lat, :lng, :start_time, :end_time WHERE EXISTS (SELECT 1 FROM track_sessions s WHERE s.id = :session_id AND s.walker_id = :__user_id)",
+      "sql": "INSERT INTO track_stops (id, session_id, lat, lng, start_time, end_time) SELECT :__uuid, :session_id, :lat, :lng, :start_time, :end_time WHERE EXISTS (SELECT 1 FROM track_sessions s, campaigns c WHERE s.id = :session_id AND s.walker_id = :__user_id AND c.id = s.campaign_id AND c.status IN ('ready','assigned'))",
       "params": {
         "session_id": {
           "type": "string"
@@ -1148,7 +1165,7 @@
       "name": "end_track_session",
       "description": "End the caller's own tracking session",
       "operation": "execute",
-      "sql": "UPDATE track_sessions SET ended_at = :ended_at WHERE id = :id AND walker_id = :__user_id",
+      "sql": "UPDATE track_sessions SET ended_at = :ended_at WHERE id = :id AND walker_id = :__user_id AND EXISTS (SELECT 1 FROM campaigns c WHERE c.id = track_sessions.campaign_id AND c.status IN ('ready','assigned'))",
       "params": {
         "id": {
           "type": "string"
