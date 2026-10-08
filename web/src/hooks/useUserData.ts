@@ -18,6 +18,7 @@ export interface UseUserData {
   userData: UserData | null;
   needsRoleSelection: boolean;
   loading: boolean;
+  error: Error | null;
   refetch: () => Promise<void>;
 }
 
@@ -34,20 +35,25 @@ export function useUserData(): UseUserData {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [needsRoleSelection, setNeedsRoleSelection] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const refetch = useCallback(async () => {
     try {
+      setError(null);
       const r = await fetchMe();
       if (r.needsRoleSelection) {
         setUserData(null);
         setNeedsRoleSelection(true);
+        setError(null);
       } else {
         setUserData(fromWire<UserData>(r.user));
         setNeedsRoleSelection(false);
+        setError(null);
       }
-    } catch {
+    } catch (err) {
       setUserData(null);
       setNeedsRoleSelection(false);
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setLoading(false);
     }
@@ -59,6 +65,7 @@ export function useUserData(): UseUserData {
       setUserData(null);
       setNeedsRoleSelection(false);
       setLoading(false);
+      setError(null);
       return;
     }
     setLoading(true);
@@ -66,5 +73,5 @@ export function useUserData(): UseUserData {
     // Keyed on the id: useProAuth hands out a new user object on every auth refresh.
   }, [currentUser?.id, authLoading, refetch]);
 
-  return { userData, needsRoleSelection, loading: authLoading || loading, refetch };
+  return { userData, needsRoleSelection, loading: authLoading || loading, error, refetch };
 }
