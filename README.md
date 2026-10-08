@@ -48,6 +48,8 @@ pnpm --filter @doordrop/web test:e2e      # Playwright headless
 pnpm --filter @doordrop/web test:e2e:ui   # Playwright interactive runner
 ```
 
+**Walker field readiness**: See [`docs/walker-field-usability.md`](docs/walker-field-usability.md) for the automated test coverage map and manual device hardware checks required for geofence, pace validation, GPS accuracy, and battery behavior.
+
 ## Status
 
 All major port-plan tasks complete as of October 2026 (see [closed issues](https://github.com/proappstore-online/doordrop/issues?q=is%3Aissue+is%3Aclosed) for details). Deferred work tracked separately: #10/#11 (chat onto `fas.rooms`), #21 (in-app notifications), #22 (admin features), #20 (votes), and platform follow-ups. See `CLAUDE.md` for the architecture overview.
