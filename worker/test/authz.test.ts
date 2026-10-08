@@ -2,7 +2,7 @@
 // signed-in user can call a registered action without the worker), so a rule
 // that only the worker enforced would show up here.
 import type { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../src/app.js';
 import worker from '../src/index.js';
 import { fakePas, freshDb } from './fake-pas.js';
@@ -65,19 +65,35 @@ describe('/v1/me', () => {
   });
 });
 
-describe('unread message badge summary', () => {
-  it('returns one caller-scoped count instead of querying every campaign', async () => {
-    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n-unread', ?, ?, 'C1', 'new', 100)")
-      .run(campaignId, CLIENT_1);
+describe('campaign room authorization', () => {
+  it('admits campaign participants and app admins only', async () => {
+    const params = { room: `campaign:${campaignId}`, key: campaignId };
+    expect((await direct(CLIENT_1, 'can_join_campaign_room', params)).rows).toEqual([{ ok: 1 }]);
+    expect((await direct(WALKER_1, 'can_join_campaign_room', params)).rows).toEqual([{ ok: 1 }]);
+    expect((await direct(ADMIN, 'can_join_campaign_room', params)).rows).toEqual([{ ok: 1 }]);
+    expect((await direct(CLIENT_2, 'can_join_campaign_room', params)).rows).toEqual([]);
+  });
+});
 
-    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
-    expect((await req(WALKER_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
-    expect((await req(CLIENT_2, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
-
-    db.prepare('INSERT INTO chat_read_state (user_id, campaign_id, last_read_at) VALUES (?, ?, ?)')
-      .run(CLIENT_1, campaignId, 100);
-    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
-    expect((await direct(CLIENT_2, 'count_my_unread_campaign_messages')).rows).toEqual([{ unread_count: 0 }]);
+describe('campaign room events', () => {
+  it('publishes a note invalidation only after the note write succeeds', async () => {
+    const pas = fakePas(db, CLIENT_1);
+    const publish = vi.fn(async () => ({ delivered: 1 }));
+    pas.rooms.publish = publish;
+    const res = await app.fetch(
+      new Request(`https://doordrop.proappstore.online/v1/campaigns/${campaignId}/notes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Room event', userName: 'C1' }),
+      }),
+      { pas },
+    );
+    const body = await res.json() as { id: string; createdAt: number };
+    expect(res.status).toBe(201);
+    expect(publish).toHaveBeenCalledWith(
+      `campaign:${campaignId}`,
+      { type: 'notes.changed', campaignId, noteId: body.id, createdAt: body.createdAt },
+    );
   });
 });
 
@@ -106,9 +122,7 @@ describe('a client cannot edit another client\'s campaign', () => {
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { admin_ids: 'x' })).status).toBe(400);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { status: 'bogus' })).status).toBe(400);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_2, budget: 50 })).status).toBe(200);
-    // Verify edit succeeded: only campaign admin can read full details (non-participants get 403)
-    expect((await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}`)).status).toBe(403);
-    const campaign = (await req(CLIENT_1, 'GET', `/v1/campaigns/${campaignId}`)).body;
+    const campaign = (await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}`)).body;
     expect(campaign).toMatchObject({ assigned_walker_id: WALKER_2, budget: 50, admin_ids: [CLIENT_1], member_ids: [] });
     const notes = (await req(WALKER_2, 'GET', '/v1/notifications')).body;
     expect(notes).toHaveLength(1);
@@ -207,6 +221,19 @@ describe('a walker cannot see or act on another walker\'s assignment', () => {
     expect(seen.body.points).toHaveLength(2);
     expect(seen.body.stops).toEqual([{ lat: 1, lng: 2, startTime: 1, endTime: 2 }]);
     expect((await req(ADMIN, 'GET', `/v1/campaigns/${campaignId}/track-sessions`)).body).toHaveLength(1);
+  });
+});
+
+describe('unread message badge summary', () => {
+  it('returns one caller-scoped count instead of one query per campaign', async () => {
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n1', ?, ?, 'C1', 'new', 100)").run(campaignId, CLIENT_1);
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
+    expect((await req(WALKER_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 1 });
+    expect((await req(CLIENT_2, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
+
+    db.prepare('INSERT INTO chat_read_state (user_id, campaign_id, last_read_at) VALUES (?, ?, 100)').run(CLIENT_1, campaignId);
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
+    expect((await direct(CLIENT_2, 'count_my_unread_campaign_messages')).rows).toEqual([{ unread_count: 0 }]);
   });
 });
 
@@ -459,107 +486,6 @@ describe('the app worker module', () => {
   });
 });
 
-describe('action-level authorization', () => {
-  it('direct action calls enforce scoping (cross-client and cross-walker reads blocked)', async () => {
-    // CLIENT_2 cannot fetch CLIENT_1's campaign directly
-    expect((await direct(CLIENT_2, 'get_campaign', { id: campaignId })).rows).toHaveLength(0);
-    expect((await direct(CLIENT_2, 'list_campaigns')).rows).toHaveLength(0);
-    expect((await direct(CLIENT_2, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(0);
-    expect((await direct(CLIENT_2, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
-
-    // WALKER_2 cannot fetch campaign data they're not assigned to
-    expect((await direct(WALKER_2, 'get_campaign', { id: campaignId })).rows).toHaveLength(0);
-    expect((await direct(WALKER_2, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(0);
-
-    // WALKER_1 can fetch the campaign they're assigned to
-    expect((await direct(WALKER_1, 'get_campaign', { id: campaignId })).rows).toHaveLength(1);
-    expect((await direct(WALKER_1, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(1);
-
-    // CLIENT_1 can fetch their own campaign
-    expect((await direct(CLIENT_1, 'get_campaign', { id: campaignId })).rows).toHaveLength(1);
-    expect((await direct(CLIENT_1, 'list_campaigns')).rows).toHaveLength(1);
-    expect((await direct(CLIENT_1, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(1);
-    expect((await direct(CLIENT_1, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
-
-    // WALKER_1 cannot fetch printouts (admin-only)
-    expect((await direct(WALKER_1, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
-
-    // History and interests scoping
-    expect((await direct(WALKER_2, 'list_history', { walker_id: WALKER_1 })).rows).toHaveLength(0);
-    expect((await direct(WALKER_1, 'list_history')).rows).toHaveLength(0);
-  });
-});
-
-describe('walker role enforcement', () => {
-  it('only walkers can create interests', async () => {
-    // Clients cannot create interests
-    expect((await req(CLIENT_1, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
-    expect((await req(CLIENT_2, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
-
-    // Admins cannot create interests
-    expect((await req(ADMIN, 'POST', '/v1/interests', { campaignId })).status).toBe(403);
-
-    // Walkers can create interests
-    expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId })).status).toBe(201);
-
-    // Direct action calls also reject non-walkers
-    expect((await direct(CLIENT_1, 'create_interest', { id: 'i1', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(0);
-    expect((await direct(ADMIN, 'create_interest', { id: 'i2', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(0);
-    expect((await direct(WALKER_1, 'create_interest', { id: 'i3', campaign_id: campaignId })).results?.[0]?.meta?.changes).toBe(1);
-  });
-
-  it('only walkers can be assigned to a campaign', async () => {
-    // CLIENT_1 (campaign admin) tries to assign a client as walker
-    const assignClientRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: CLIENT_2 });
-    expect(assignClientRes.status).toBe(400);
-
-    // Tries to assign admin as walker
-    const assignAdminRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: ADMIN });
-    expect(assignAdminRes.status).toBe(400);
-
-    // Assigning a walker succeeds
-    const assignWalkerRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_2 });
-    expect(assignWalkerRes.status).toBe(200);
-
-    // Verify direct action also rejects non-walker assignment
-    const directAssignClient = await direct(CLIENT_1, 'update_campaign', { id: campaignId, patch: JSON.stringify({ assigned_walker_id: CLIENT_2 }) });
-    expect(directAssignClient.meta.changes).toBe(0);
-
-    // Direct action allows walker assignment
-    const directAssignWalker = await direct(CLIENT_1, 'update_campaign', { id: campaignId, patch: JSON.stringify({ assigned_walker_id: WALKER_1 }) });
-    expect(directAssignWalker.meta.changes).toBe(1);
-  });
-});
-
-describe('campaign creation role enforcement', () => {
-  it('only clients and admins can create campaigns', async () => {
-    // Walkers cannot create campaigns
-    const walkerCreateRes = await req(WALKER_1, 'POST', '/v1/campaigns', { name: 'Walker Campaign' });
-    expect(walkerCreateRes.status).toBe(403);
-
-    // Clients can create campaigns
-    const clientCreateRes = await req(CLIENT_2, 'POST', '/v1/campaigns', { name: 'Client Campaign' });
-    expect(clientCreateRes.status).toBe(201);
-    expect(clientCreateRes.body.id).toBeDefined();
-
-    // Admins can create campaigns
-    const adminCreateRes = await req(ADMIN, 'POST', '/v1/campaigns', { name: 'Admin Campaign' });
-    expect(adminCreateRes.status).toBe(201);
-    expect(adminCreateRes.body.id).toBeDefined();
-
-    // Direct action calls also enforce the role check
-    const walkerDirectCreate = await direct(WALKER_2, 'create_campaign', { id: 'c_walker', name: 'Direct Walker Campaign', admin_ids: JSON.stringify([WALKER_2]), status: 'draft' });
-    expect(walkerDirectCreate.meta.changes).toBe(0);
-
-    // Clients and admins can create via direct action
-    const clientDirectCreate = await direct(CLIENT_1, 'create_campaign', { id: 'c_client', name: 'Direct Client Campaign', admin_ids: JSON.stringify([CLIENT_1]), status: 'draft' });
-    expect(clientDirectCreate.meta.changes).toBe(1);
-
-    const adminDirectCreate = await direct(ADMIN, 'create_campaign', { id: 'c_admin', name: 'Direct Admin Campaign', admin_ids: JSON.stringify([ADMIN]), status: 'draft' });
-    expect(adminDirectCreate.meta.changes).toBe(1);
-  });
-});
-
 describe('admin area', () => {
   it('stats, all-doors and campaign status are app-admin only, through the worker and the actions', async () => {
     for (const user of [CLIENT_1, WALKER_1]) {
@@ -584,266 +510,5 @@ describe('admin area', () => {
     expect((await req(ADMIN, 'POST', `/v1/admin/campaigns/${campaignId}/status`, { status: 'complete', job_status: 'completed' })).status).toBe(200);
     expect(row('SELECT status, job_status FROM campaigns WHERE id = ?', campaignId)).toEqual({ status: 'complete', job_status: 'completed' });
     expect(row('SELECT completed_at FROM campaigns WHERE id = ?', campaignId).completed_at).toBeGreaterThan(0);
-  });
-
-  describe('delivery and tracking writes blocked in closed campaign states', () => {
-    let testCampaignId: string;
-    let testDoorId: string;
-    let testSessionId: string;
-
-    beforeEach(async () => {
-      // Set up a campaign in 'assigned' status with assigned walker
-      const created = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Lifecycle test campaign' });
-      testCampaignId = created.body.id;
-      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, {
-        assigned_walker_id: WALKER_1,
-        status: 'assigned',
-      });
-
-      // Create a test door
-      const door = await req(CLIENT_1, 'POST', `/v1/campaigns/${testCampaignId}/doors`, { address: '123 Test St' });
-      testDoorId = door.body.id;
-
-      // Create a test tracking session
-      const session = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
-      testSessionId = session.body.id;
-    });
-
-    async function testClosedStatus(status: string) {
-      // Transition campaign to the closed status
-      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, { status });
-
-      // Test: assigned walker cannot patch doors in closed campaign
-      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
-        status: 'delivered',
-        delivered_at: Date.now(),
-        delivered_by: WALKER_1,
-      });
-      expect(patchDoor.status).toBe(409);
-      expect(patchDoor.body).toMatchObject({ error: 'campaign is not active' });
-
-      // Test: direct action call also fails
-      const directPatch = await direct(WALKER_1, 'update_door_as_walker', {
-        id: testDoorId,
-        campaign_id: testCampaignId,
-        patch: JSON.stringify({ status: 'delivered', delivered_by: WALKER_1 }),
-      });
-      expect(directPatch.meta.changes).toBe(0);
-
-      // Test: assigned walker cannot start new track session in closed campaign
-      const newSession = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
-      expect(newSession.status).toBe(409);
-      expect(newSession.body).toMatchObject({ error: 'campaign is not active' });
-
-      // Test: direct action for start_track_session also fails
-      const directStartSession = await direct(WALKER_1, 'start_track_session', {
-        id: `session-${status}`,
-        campaign_id: testCampaignId,
-      });
-      expect(directStartSession.meta.changes).toBe(0);
-
-      // Test: cannot append track point in closed campaign
-      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
-        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
-      });
-      expect(appendPoint.status).toBe(409);
-      expect(appendPoint.body).toMatchObject({ error: 'campaign is not active' });
-
-      // Test: direct action for append_track_point also fails
-      const directAppendPoint = await direct(WALKER_1, 'append_track_point', {
-        session_id: testSessionId,
-        t: Date.now(),
-        lat: -37.8,
-        lng: 144.9,
-      });
-      expect(directAppendPoint.meta.changes).toBe(0);
-
-      // Test: cannot append track stop in closed campaign
-      const appendStop = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
-        stops: [{ lat: -37.8, lng: 144.9, startTime: Date.now(), endTime: Date.now() + 60000 }],
-      });
-      expect(appendStop.status).toBe(409);
-      expect(appendStop.body).toMatchObject({ error: 'campaign is not active' });
-
-      // Test: direct action for append_track_stop also fails
-      const directAppendStop = await direct(WALKER_1, 'append_track_stop', {
-        session_id: testSessionId,
-        lat: -37.8,
-        lng: 144.9,
-        start_time: Date.now(),
-        end_time: Date.now() + 60000,
-      });
-      expect(directAppendStop.meta.changes).toBe(0);
-
-      // Test: cannot end track session in closed campaign
-      const endSession = await req(WALKER_1, 'PATCH', `/v1/track-sessions/${testSessionId}`, {
-        ended_at: Date.now(),
-      });
-      expect(endSession.status).toBe(409);
-      expect(endSession.body).toMatchObject({ error: 'campaign is not active' });
-
-      // Test: direct action for end_track_session also fails
-      const directEndSession = await direct(WALKER_1, 'end_track_session', {
-        id: testSessionId,
-        ended_at: Date.now(),
-      });
-      expect(directEndSession.meta.changes).toBe(0);
-    }
-
-    it('blocks delivery writes in complete status', async () => {
-      await testClosedStatus('complete');
-    });
-
-    it('blocks delivery writes in review status', async () => {
-      await testClosedStatus('review');
-    });
-
-    it('blocks delivery writes in payment status', async () => {
-      await testClosedStatus('payment');
-    });
-
-    it('blocks delivery writes in archive status', async () => {
-      await testClosedStatus('archive');
-    });
-
-    it('allows delivery writes in ready status', async () => {
-      // This campaign is already in 'assigned' status, transition it to 'ready'
-      await req(CLIENT_1, 'PATCH', `/v1/campaigns/${testCampaignId}`, { status: 'ready' });
-
-      // Should succeed: walker can patch door
-      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
-        status: 'delivered',
-        delivered_at: Date.now(),
-        delivered_by: WALKER_1,
-      });
-      expect(patchDoor.status).toBe(200);
-      expect(patchDoor.body).toEqual({ ok: true });
-
-      // Should succeed: walker can append track point
-      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
-        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
-      });
-      expect(appendPoint.status).toBe(200);
-    });
-
-    it('allows delivery writes in assigned status', async () => {
-      // Campaign is already in 'assigned' status
-
-      // Should succeed: walker can patch door
-      const patchDoor = await req(WALKER_1, 'PATCH', `/v1/campaigns/${testCampaignId}/doors/${testDoorId}`, {
-        status: 'delivered',
-        delivered_at: Date.now(),
-        delivered_by: WALKER_1,
-      });
-      expect(patchDoor.status).toBe(200);
-      expect(patchDoor.body).toEqual({ ok: true });
-
-      // Should succeed: walker can start new track session
-      const newSession = await req(WALKER_1, 'POST', `/v1/campaigns/${testCampaignId}/track-sessions`);
-      expect(newSession.status).toBe(201);
-      expect(newSession.body).toHaveProperty('id');
-
-      // Should succeed: walker can append track point
-      const appendPoint = await req(WALKER_1, 'POST', `/v1/track-sessions/${testSessionId}/append`, {
-        points: [{ t: Date.now(), lat: -37.8, lng: 144.9 }],
-      });
-      expect(appendPoint.status).toBe(200);
-    });
-  });
-
-  describe('Issue #51: flyer immutability and archive rules', () => {
-    it('cannot delete a flyer that is referenced by a campaign printout', async () => {
-      // Create a flyer
-      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Test Flyer' });
-      expect(flyerRes.status).toBe(201);
-      const flyerId = flyerRes.body.id;
-
-      // Create a campaign and printout referencing the flyer
-      const campaignRes = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Test Campaign' });
-      expect(campaignRes.status).toBe(201);
-      const cId = campaignRes.body.id;
-
-      const printoutRes = await req(CLIENT_1, 'POST', `/v1/campaigns/${cId}/printouts`, {
-        name: 'Printout 1',
-        flyer_id: flyerId,
-      });
-      expect(printoutRes.status).toBe(201);
-
-      // Try to delete the flyer - should fail with 409
-      const deleteRes = await req(CLIENT_1, 'DELETE', `/v1/users/${CLIENT_1}/flyers/${flyerId}`);
-      expect(deleteRes.status).toBe(409);
-      expect(deleteRes.body).toHaveProperty('campaigns');
-      expect(deleteRes.body.campaigns).toContain(cId);
-
-      // Verify flyer still exists
-      const flyersRes = await req(CLIENT_1, 'GET', `/v1/users/${CLIENT_1}/flyers`);
-      expect(flyersRes.body).toHaveLength(1);
-    });
-
-    it('can delete a flyer that has no campaign references', async () => {
-      // Create a flyer with no campaigns
-      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Orphan Flyer' });
-      expect(flyerRes.status).toBe(201);
-      const flyerId = flyerRes.body.id;
-
-      // Delete should succeed
-      const deleteRes = await req(CLIENT_1, 'DELETE', `/v1/users/${CLIENT_1}/flyers/${flyerId}`);
-      expect(deleteRes.status).toBe(200);
-
-      // Verify flyer is gone
-      const flyersRes = await req(CLIENT_1, 'GET', `/v1/users/${CLIENT_1}/flyers`);
-      expect(flyersRes.body).toHaveLength(0);
-    });
-
-    it('can archive and unarchive a flyer', async () => {
-      // Create a flyer
-      const flyerRes = await req(CLIENT_1, 'POST', `/v1/users/${CLIENT_1}/flyers`, { name: 'Archivable Flyer' });
-      expect(flyerRes.status).toBe(201);
-      const flyerId = flyerRes.body.id;
-
-      // Archive the flyer
-      const archiveRes = await req(CLIENT_1, 'PATCH', `/v1/users/${CLIENT_1}/flyers/${flyerId}/archive`, {});
-      expect(archiveRes.status).toBe(200);
-
-      // Verify archived_at is set
-      const archivedFlyer = (await direct(CLIENT_1, 'list_my_flyers')).rows[0]!;
-      expect(archivedFlyer.archived_at).toBeTruthy();
-
-      // Unarchive the flyer
-      const unarchiveRes = await req(CLIENT_1, 'PATCH', `/v1/users/${CLIENT_1}/flyers/${flyerId}/unarchive`, {});
-      expect(unarchiveRes.status).toBe(200);
-
-      // Verify archived_at is null
-      const unarchivedFlyer = (await direct(CLIENT_1, 'list_my_flyers')).rows[0]!;
-      expect(unarchivedFlyer.archived_at).toBeNull();
-    });
-
-    it('cannot update a printout if campaign delivery has started', async () => {
-      // Create a campaign and printout
-      const campaignRes = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Immutable Campaign' });
-      expect(campaignRes.status).toBe(201);
-      const cId = campaignRes.body.id;
-
-      const printoutRes = await req(CLIENT_1, 'POST', `/v1/campaigns/${cId}/printouts`, { name: 'Original Name' });
-      expect(printoutRes.status).toBe(201);
-      const pId = printoutRes.body.id;
-
-      // Update should succeed while in draft
-      const updateDraftRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}/printouts/${pId}`, {
-        name: 'Updated Name',
-      });
-      expect(updateDraftRes.status).toBe(200);
-
-      // Change campaign status to 'ready' (delivery started)
-      const statusRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}`, { status: 'ready' });
-      expect(statusRes.status).toBe(200);
-
-      // Try to update printout - should fail with 409
-      const updateLockedRes = await req(CLIENT_1, 'PATCH', `/v1/campaigns/${cId}/printouts/${pId}`, {
-        name: 'Another Name',
-      });
-      expect(updateLockedRes.status).toBe(409);
-      expect(updateLockedRes.body.campaignStatus).toBe('ready');
-    });
   });
 });

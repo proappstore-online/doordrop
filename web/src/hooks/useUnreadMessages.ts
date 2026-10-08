@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthContext } from './useAuthContext';
 import { apiGet } from '../lib/api';
 
-// This badge is present on every signed-in page. Detailed chat updates occur
-// on the campaign page, so a modest foreground refresh is enough here.
+// This badge is present on every signed-in page. Keep its refresh deliberately
+// modest: detailed, near-real-time chat polling happens only on the chat page.
 const UNREAD_POLL_MS = 5 * 60_000;
 
 export function useUnreadMessages() {
@@ -18,19 +18,19 @@ export function useUnreadMessages() {
     let cancelled = false;
 
     const refresh = async () => {
+      // A hidden tab does not need to keep the shared app-worker quota warm.
       if (document.visibilityState !== 'visible') return;
       try {
         const { unreadCount } = await apiGet<{ unreadCount: number }>('/v1/me/unread-messages');
         if (!cancelled) setTotalUnread(unreadCount);
       } catch {
-        /* Keep the last known count; a later foreground refresh can retry. */
+        /* swallow */
       }
     };
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
-
     void refresh();
     const interval = setInterval(() => void refresh(), UNREAD_POLL_MS);
     document.addEventListener('visibilitychange', onVisible);

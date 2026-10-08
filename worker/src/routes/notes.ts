@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { campaignAccess, whoami } from '../auth.js';
-import { rows, run, publishRoom, type AppEnv, type Ctx } from '../pas.js';
+import { rows, run, type AppEnv, type Ctx } from '../pas.js';
 import { newId } from '../lib.js';
+import { publishCampaignEvent } from '../realtime.js';
 
 const router = new Hono<AppEnv>();
 
@@ -38,15 +39,13 @@ router.post('/campaigns/:campaignId/notes', async (c) => {
   const id = newId();
   const ts = Date.now();
   await run(c, 'create_campaign_note', { id, campaign_id: campaignId, user_name: body.userName, text: body.text, created_at: ts });
-  void publishRoom(c, `campaign:${campaignId}:notes`, { action: 'refresh' });
+  await publishCampaignEvent(c, { type: 'notes.changed', campaignId, noteId: id, createdAt: ts });
   return c.json({ id, createdAt: ts }, 201);
 });
 
 router.put('/users/:userId/chat-read-state/:campaignId', async (c) => {
   await requireSelf(c);
-  const userId = c.req.param('userId');
   await run(c, 'set_chat_read_state', { campaign_id: c.req.param('campaignId') });
-  void publishRoom(c, `user:${userId}:read-state`, { action: 'refresh' });
   return c.json({ ok: true });
 });
 
@@ -58,8 +57,8 @@ router.get('/users/:userId/chat-read-state', async (c) => {
   return c.json(states);
 });
 
-// The persistent top-bar badge must be a single query. Fetching each campaign
-// and its latest note on a timer made worker traffic grow with campaign count.
+// The top-bar badge must be a single request. Fetching each campaign and its
+// latest note on a timer made the request rate grow with a user's campaign count.
 router.get('/me/unread-messages', async (c) => {
   const result = await rows<{ unread_count: number }>(c, 'count_my_unread_campaign_messages');
   return c.json({ unreadCount: Number(result[0]?.unread_count ?? 0) });

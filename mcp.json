@@ -1,4 +1,10 @@
 {
+  "rooms": [
+    {
+      "pattern": "campaign:*",
+      "authorize": "can_join_campaign_room"
+    }
+  ],
   "tools": [
     {
       "name": "whoami",
@@ -14,6 +20,24 @@
       "operation": "query",
       "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE id = :__user_id",
       "params": {},
+      "requires_auth": true
+    },
+    {
+      "name": "can_join_campaign_room",
+      "description": "Whether the caller may join a campaign's real-time room",
+      "operation": "query",
+      "sql": "SELECT 1 AS ok FROM campaigns c WHERE c.id = :key AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) a WHERE a.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users u WHERE u.id = :__user_id AND u.role = 'admin')) LIMIT 1",
+      "params": {
+        "room": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "callers": [
+        "user"
+      ],
       "requires_auth": true
     },
     {

@@ -6,12 +6,26 @@ import { freshDb, toolStatements, tools } from './fake-pas.js';
 
 const MAGIC = new Set(['__user_id', '__now', '__uuid']);
 const placeholders = (sql: string) => [...sql.matchAll(/:([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]!);
+const manifest = JSON.parse(readFileSync(new URL('../../mcp.json', import.meta.url), 'utf8')) as {
+  rooms?: Array<{ pattern?: string; authorize?: string }>;
+};
 
 describe('mcp.json', () => {
   it('has unique, well-formed tool names', () => {
     const names = tools.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
     for (const name of names) expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
+  });
+
+  it('protects every declared campaign room with a registered caller-scoped query', () => {
+    for (const room of manifest.rooms ?? []) {
+      expect(room.pattern).toMatch(/^[a-z][a-z0-9_-]*:\*$/);
+      const action = tools.find((tool) => tool.name === room.authorize);
+      expect(action).toMatchObject({ operation: 'query', requires_auth: true });
+      expect(action?.callers ?? ['user']).toContain('user');
+      expect(action?.params).toHaveProperty('room');
+      expect(action?.params).toHaveProperty('key');
+    }
   });
 
   for (const tool of tools) {
@@ -63,7 +77,8 @@ describe('mcp.json', () => {
       }
     }
     const declared = new Set(tools.map((t) => t.name));
+    const roomAuthorizers = new Set((manifest.rooms ?? []).map((room) => room.authorize).filter((name): name is string => !!name));
     expect([...used].filter((n) => !declared.has(n))).toEqual([]);
-    expect([...declared].filter((n) => !literals.has(n))).toEqual([]);
+    expect([...declared].filter((n) => !literals.has(n) && !roomAuthorizers.has(n))).toEqual([]);
   });
 });

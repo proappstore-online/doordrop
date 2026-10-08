@@ -63,7 +63,15 @@ export async function batch(c: Ctx, calls: { name: string; params: Params }[]): 
   }
 }
 
-/** Publish an event to a room for real-time updates. */
-export function publishRoom(c: Ctx, roomId: string, data: unknown): Promise<{ delivered: number }> {
-  return pasCall(() => c.env.pas.rooms.publish(roomId, data));
+/**
+ * Broadcast a non-authoritative change notification after its D1 write commits.
+ * A room is a delivery optimisation: callers must still load durable state on
+ * initial mount and reconnect, and a failed broadcast must not fail the write.
+ */
+export async function publish(c: Ctx, roomId: string, event: Record<string, unknown>): Promise<void> {
+  try {
+    await c.env.pas.rooms.publish(roomId, event);
+  } catch (e) {
+    console.warn('[doordrop-worker] room publish failed', roomId, e);
+  }
 }

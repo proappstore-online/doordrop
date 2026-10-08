@@ -14,7 +14,7 @@ export const useNotifications = () => {
     try {
       setNotifications(await NotificationRepository.list());
     } catch {
-      // Leave the last known list in place; a foreground refresh can retry.
+      // Leave the last known list in place; another foreground refresh can retry.
     }
   }, [currentUser?.id]);
 
@@ -24,11 +24,12 @@ export const useNotifications = () => {
       return;
     }
     void refresh();
+
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === 'visible') void refresh();
     };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [currentUser?.id, refresh]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

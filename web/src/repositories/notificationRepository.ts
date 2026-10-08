@@ -5,8 +5,8 @@ import { fromWire } from '../lib/transform';
 export type NotificationWithId = NotificationData & { id: string };
 
 export const NotificationRepository = {
-  // The top bar refreshes this on mount, focus, and bell open; it must not
-  // consume the app-worker quota continuously while the page is idle.
+  // Push handles timely alerts. The top bar fetches this on mount, focus and
+  // when the bell opens; it must not spend the app-wide worker quota every 5s.
   async list(): Promise<NotificationWithId[]> {
     const raw = await apiGet<unknown[]>('/v1/notifications');
     return raw.map((r) => fromWire<NotificationWithId>(r));

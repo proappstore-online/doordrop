@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiPut, ApiError } from '../lib/api';
 import { fromWire } from '../lib/transform';
-import type { CampaignNote } from './campaignNoteRepository';
+import { CampaignNoteRepository, type CampaignNote } from './campaignNoteRepository';
 import type { ChatReadState } from '../models/chatReadState';
 
 export const ChatRepository = {
@@ -16,35 +16,8 @@ export const ChatRepository = {
     });
   },
 
-  // TODO(task #10): port to fas.rooms `chat:{campaignId}` for true real-time.
-  // Polling for now; rooms integration handled at page level via useApp() hook.
   subscribeToMessages(campaignId: string, callback: (notes: CampaignNote[]) => void): () => void {
-    let active = true;
-    let lastTs = 0;
-    const accum: CampaignNote[] = [];
-
-    const tick = async () => {
-      if (!active) return;
-      try {
-        const raw = await apiGet<unknown[]>(
-          `/v1/campaigns/${campaignId}/notes${lastTs ? `?since=${lastTs}` : ''}`,
-        );
-        const fresh = raw.map((r) => fromWire<CampaignNote>(r));
-        if (fresh.length > 0) {
-          for (const n of fresh) accum.push(n);
-          lastTs = Math.max(...fresh.map((n) => n.createdAt.getTime()));
-          callback([...accum]);
-        }
-      } catch {
-        /* swallow */
-      }
-      if (active) setTimeout(tick, 3000);
-    };
-
-    void tick();
-    return () => {
-      active = false;
-    };
+    return CampaignNoteRepository.subscribeToNotes(campaignId, callback);
   },
 
   async getLatestMessage(campaignId: string): Promise<CampaignNote | null> {
