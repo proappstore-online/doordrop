@@ -21,6 +21,14 @@ export interface UseUserData {
   refetch: () => Promise<void>;
 }
 
+// Many components call this hook at once; share one in-flight /v1/me between them
+// (identical concurrent GETs also queue behind each other in the browser).
+let inflight: Promise<MeResponse> | null = null;
+function fetchMe(): Promise<MeResponse> {
+  inflight ??= apiGet<MeResponse>('/v1/me').finally(() => { inflight = null; });
+  return inflight;
+}
+
 export function useUserData(): UseUserData {
   const { currentUser, loading: authLoading } = useAuthContext();
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -28,9 +36,8 @@ export function useUserData(): UseUserData {
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
-    setLoading(true);
     try {
-      const r = await apiGet<MeResponse>('/v1/me');
+      const r = await fetchMe();
       if (r.needsRoleSelection) {
         setUserData(null);
         setNeedsRoleSelection(true);
@@ -54,8 +61,10 @@ export function useUserData(): UseUserData {
       setLoading(false);
       return;
     }
+    setLoading(true);
     void refetch();
-  }, [currentUser, authLoading, refetch]);
+    // Keyed on the id: useProAuth hands out a new user object on every auth refresh.
+  }, [currentUser?.id, authLoading, refetch]);
 
   return { userData, needsRoleSelection, loading: authLoading || loading, refetch };
 }
