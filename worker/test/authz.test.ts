@@ -441,6 +441,37 @@ describe('the app worker module', () => {
   });
 });
 
+describe('action-level authorization', () => {
+  it('direct action calls enforce scoping (cross-client and cross-walker reads blocked)', async () => {
+    // CLIENT_2 cannot fetch CLIENT_1's campaign directly
+    expect((await direct(CLIENT_2, 'get_campaign', { id: campaignId })).rows).toHaveLength(0);
+    expect((await direct(CLIENT_2, 'list_campaigns')).rows).toHaveLength(0);
+    expect((await direct(CLIENT_2, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(0);
+    expect((await direct(CLIENT_2, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
+
+    // WALKER_2 cannot fetch campaign data they're not assigned to
+    expect((await direct(WALKER_2, 'get_campaign', { id: campaignId })).rows).toHaveLength(0);
+    expect((await direct(WALKER_2, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(0);
+
+    // WALKER_1 can fetch the campaign they're assigned to
+    expect((await direct(WALKER_1, 'get_campaign', { id: campaignId })).rows).toHaveLength(1);
+    expect((await direct(WALKER_1, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(1);
+
+    // CLIENT_1 can fetch their own campaign
+    expect((await direct(CLIENT_1, 'get_campaign', { id: campaignId })).rows).toHaveLength(1);
+    expect((await direct(CLIENT_1, 'list_campaigns')).rows).toHaveLength(1);
+    expect((await direct(CLIENT_1, 'list_doors', { campaign_id: campaignId })).rows).toHaveLength(1);
+    expect((await direct(CLIENT_1, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
+
+    // WALKER_1 cannot fetch printouts (admin-only)
+    expect((await direct(WALKER_1, 'list_printouts', { campaign_id: campaignId })).rows).toHaveLength(0);
+
+    // History and interests scoping
+    expect((await direct(WALKER_2, 'list_history', { walker_id: WALKER_1 })).rows).toHaveLength(0);
+    expect((await direct(WALKER_1, 'list_history')).rows).toHaveLength(0);
+  });
+});
+
 describe('admin area', () => {
   it('stats, all-doors and campaign status are app-admin only, through the worker and the actions', async () => {
     for (const user of [CLIENT_1, WALKER_1]) {

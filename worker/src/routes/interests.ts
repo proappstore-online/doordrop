@@ -32,7 +32,10 @@ router.post('/interests', async (c) => {
   if (typeof body.campaignId !== 'string' || body.campaignId.length === 0) {
     throw new HTTPException(400, { message: 'campaignId required' });
   }
-  if (!(await first(c, 'get_campaign', { id: body.campaignId }))) {
+
+  // Check if campaign exists (campaign_access returns null iff campaign does not exist)
+  const campaign = await campaignAccess(c, body.campaignId);
+  if (!campaign) {
     throw new HTTPException(404, { message: 'campaign not found' });
   }
 

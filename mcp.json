@@ -59,9 +59,9 @@
     },
     {
       "name": "list_users",
-      "description": "Users, filtered by role / campaign / address fields",
+      "description": "Admin: users, filtered by role / campaign / address fields",
       "operation": "query",
-      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE (:role IS NULL OR role = :role) AND (:campaign_id IS NULL OR campaign_id = :campaign_id) AND (:street IS NULL OR street = :street) AND (:suburb IS NULL OR suburb = :suburb) AND (:postcode IS NULL OR postcode = :postcode) AND (:location IS NULL OR location = :location) LIMIT 500",
+      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') AND (:role IS NULL OR role = :role) AND (:campaign_id IS NULL OR campaign_id = :campaign_id) AND (:street IS NULL OR street = :street) AND (:suburb IS NULL OR suburb = :suburb) AND (:postcode IS NULL OR postcode = :postcode) AND (:location IS NULL OR location = :location) LIMIT 500",
       "params": {
         "role": {
           "type": "string",
@@ -88,12 +88,7 @@
           "optional": true
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "update_my_user",
@@ -153,22 +148,14 @@
     },
     {
       "name": "list_campaigns",
-      "description": "Campaigns, filtered by status list / admin / assigned walker / suburb / postcode, newest first",
+      "description": "Campaigns the caller participates in or admin campaigns, filtered by status / suburb / postcode, newest first",
       "operation": "query",
-      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE (:statuses IS NULL OR c.status IN (SELECT value FROM json_each(:statuses))) AND (:admin_id IS NULL OR EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :admin_id)) AND (:walker_id IS NULL OR c.assigned_walker_id = :walker_id) AND (:suburb IS NULL OR c.suburb = :suburb) AND (:postcode IS NULL OR c.postcode = :postcode) ORDER BY c.created_at DESC LIMIT 500",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE (:statuses IS NULL OR c.status IN (SELECT value FROM json_each(:statuses))) AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) AND (:suburb IS NULL OR c.suburb = :suburb) AND (:postcode IS NULL OR c.postcode = :postcode) ORDER BY c.created_at DESC LIMIT 500",
       "params": {
         "statuses": {
           "type": "string",
           "optional": true,
           "description": "JSON array of statuses"
-        },
-        "admin_id": {
-          "type": "string",
-          "optional": true
-        },
-        "walker_id": {
-          "type": "string",
-          "optional": true
         },
         "suburb": {
           "type": "string",
@@ -179,29 +166,19 @@
           "optional": true
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "get_campaign",
-      "description": "A campaign by id",
+      "description": "A campaign by id (caller must be admin, assigned walker, or app admin)",
       "operation": "query",
-      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns WHERE id = :id",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns WHERE id = :id AND (EXISTS (SELECT 1 FROM json_each(admin_ids) j WHERE j.value = :__user_id) OR assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin'))",
       "params": {
         "id": {
           "type": "string"
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "campaign_access",
@@ -382,20 +359,15 @@
     },
     {
       "name": "list_doors",
-      "description": "A campaign's doors",
+      "description": "A campaign's doors (caller must be admin, assigned walker, or app admin)",
       "operation": "query",
-      "sql": "SELECT * FROM doors WHERE campaign_id = :campaign_id ORDER BY street_name, house_number",
+      "sql": "SELECT * FROM doors WHERE campaign_id = :campaign_id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY street_name, house_number",
       "params": {
         "campaign_id": {
           "type": "string"
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "create_door",
@@ -494,20 +466,15 @@
     },
     {
       "name": "list_printouts",
-      "description": "A campaign's printouts, newest version first",
+      "description": "A campaign's printouts (campaign admin only), newest version first",
       "operation": "query",
-      "sql": "SELECT * FROM printouts WHERE campaign_id = :campaign_id ORDER BY version DESC",
+      "sql": "SELECT * FROM printouts WHERE campaign_id = :campaign_id AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY version DESC",
       "params": {
         "campaign_id": {
           "type": "string"
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "create_printout",
@@ -773,9 +740,9 @@
     },
     {
       "name": "list_interests",
-      "description": "Walker interests, filtered by walker / campaign, newest first",
+      "description": "Walker interests (filtered by campaign: campaign-admin only; by walker: self or admin)",
       "operation": "query",
-      "sql": "SELECT * FROM walker_interests WHERE (:walker_id IS NULL OR walker_id = :walker_id) AND (:campaign_id IS NULL OR campaign_id = :campaign_id) ORDER BY created_at DESC LIMIT 500",
+      "sql": "SELECT * FROM walker_interests WHERE (:walker_id IS NULL OR walker_id = :walker_id OR :walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) AND (:campaign_id IS NULL OR EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY created_at DESC LIMIT 500",
       "params": {
         "walker_id": {
           "type": "string",
@@ -786,12 +753,7 @@
           "optional": true
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "create_interest",
@@ -932,21 +894,16 @@
     },
     {
       "name": "list_history",
-      "description": "Delivery history records, optionally for one walker, newest first",
+      "description": "Delivery history records (self or admin only), optionally for one walker, newest first",
       "operation": "query",
-      "sql": "SELECT * FROM history_records WHERE (:walker_id IS NULL OR walker_id = :walker_id) ORDER BY date DESC LIMIT 500",
+      "sql": "SELECT * FROM history_records WHERE (:walker_id IS NULL OR :walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) AND (:walker_id IS NULL OR walker_id = :walker_id) ORDER BY date DESC LIMIT 500",
       "params": {
         "walker_id": {
           "type": "string",
           "optional": true
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "create_history",
