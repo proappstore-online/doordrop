@@ -21,6 +21,7 @@ import AddressSelectionPanel from "../../components/campaign/AddressSelectionPan
 import StatusControlsBar from "../../components/campaign/StatusControlsBar";
 import PrintoutSelector from "../../components/campaign/PrintoutSelector";
 import CampaignNotices from "../../components/campaign/CampaignNotices";
+import PublishReadinessModal from "../../components/campaign/PublishReadinessModal";
 import ReviewForm from "../../components/reviews/ReviewForm";
 import ReviewPrompt from "../../components/reviews/ReviewPrompt";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
@@ -77,6 +78,9 @@ const ClientCampaignDetailPage: React.FC = () => {
   const [editJunkMailPolicy, setEditJunkMailPolicy] = useState<"deliver" | "skip">("deliver");
   const [editPropertyFilter, setEditPropertyFilter] = useState<"all" | "residential" | "commercial">("all");
   const [savingDetails, setSavingDetails] = useState(false);
+
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const [expandedDoorId, setExpandedDoorId] = useState<string | null>(null);
 
@@ -295,16 +299,36 @@ const ClientCampaignDetailPage: React.FC = () => {
     }
   };
 
-  const handlePublish = async () => {
+  const handlePublish = () => {
+    if (!campaignId || !isAdmin) return;
+    setShowPublishModal(true);
+  };
+
+  const handleConfirmPublish = async () => {
     if (!campaignId || !isAdmin) return;
 
-    // Issue #21: Block publish if no active flyer is set
+    // Validate required fields
     if (!campaign?.activePrintoutId) {
       setMutationError("Please select an active flyer before publishing. Walkers need to know what to deliver.");
       return;
     }
 
-    setStatusUpdating(true);
+    if (doors.length === 0) {
+      setMutationError("Please select at least one delivery location before publishing.");
+      return;
+    }
+
+    if (!campaign?.doorRadiusM || campaign.doorRadiusM <= 0) {
+      setMutationError("Please set a delivery radius before publishing.");
+      return;
+    }
+
+    if (!campaign?.suburb || !campaign?.postcode || !campaign?.state) {
+      setMutationError("Location is not complete. Please verify suburb, postcode, and state.");
+      return;
+    }
+
+    setIsPublishing(true);
     setMutationError(null);
     try {
       const budgetNum = parseFloat(editBudget);
@@ -321,12 +345,17 @@ const ClientCampaignDetailPage: React.FC = () => {
       if (!isNaN(radiusNum) && radiusNum > 0) updates.doorRadiusM = radiusNum;
       await CampaignRepository.updateGroup(campaignId, updates);
       setCampaign((prev) => (prev ? { ...prev, ...updates } : prev));
+      setShowPublishModal(false);
     } catch (err) {
       console.error("Failed to publish campaign:", err);
       setMutationError("We couldn't publish your campaign. Your changes have been kept—please try again.");
     } finally {
-      setStatusUpdating(false);
+      setIsPublishing(false);
     }
+  };
+
+  const handleSaveDraft = () => {
+    setShowPublishModal(false);
   };
 
   const doorsRef = useRef(doors);
@@ -581,6 +610,9 @@ const ClientCampaignDetailPage: React.FC = () => {
         isCampaignClosed={isCampaignClosed}
         isWalker={isWalker}
         isAssignedWalker={isAssignedWalker}
+        isAdmin={isAdmin}
+        campaignData={campaign}
+        totalDoors={doors.length}
       />
 
       {isAssignedWalker && !isCampaignClosed && (
@@ -621,7 +653,16 @@ const ClientCampaignDetailPage: React.FC = () => {
           onPropertyFilterChange={setEditPropertyFilter}
           onSave={handleSaveDetails}
           onPublish={handlePublish}
-          publishDisabled={statusUpdating || doors.length === 0}
+          publishDisabled={
+            statusUpdating ||
+            isPublishing ||
+            doors.length === 0 ||
+            !campaign?.activePrintoutId ||
+            !campaign?.doorRadiusM ||
+            campaign.doorRadiusM <= 0 ||
+            !campaign?.suburb ||
+            !campaign?.postcode
+          }
         />
       )}
 
@@ -887,6 +928,18 @@ const ClientCampaignDetailPage: React.FC = () => {
           formatDate={(date) => new Date(date).toLocaleString()}
         />
       )}
+
+      {/* Issue #47: Publish readiness modal */}
+      <PublishReadinessModal
+        isOpen={showPublishModal}
+        isPublishing={isPublishing}
+        campaignData={campaign}
+        totalDoors={doors.length}
+        doorRadiusKm={campaign?.doorRadiusM ? Math.round(campaign.doorRadiusM / 1000) : 0}
+        onPublish={handleConfirmPublish}
+        onSaveDraft={handleSaveDraft}
+        onClose={() => setShowPublishModal(false)}
+      />
     </div>
   );
 };

@@ -5,6 +5,8 @@ interface StatusAction {
   label: string;
   status: CampaignStatus;
   className: string;
+  disabled?: boolean;
+  tooltip?: string;
 }
 
 interface StatusControlsBarProps {
@@ -23,14 +25,15 @@ const StatusControlsBar: React.FC<StatusControlsBarProps> = ({
   return (
     <div className="flex gap-2">
       {statusActions.map((action) => (
-        <button
-          key={action.status}
-          onClick={() => onStatusChange(action.status)}
-          disabled={statusUpdating}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${action.className}`}
-        >
-          {action.label}
-        </button>
+        <div key={action.status} title={action.tooltip}>
+          <button
+            onClick={() => onStatusChange(action.status)}
+            disabled={statusUpdating || action.disabled}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${action.className}`}
+          >
+            {action.label}
+          </button>
+        </div>
       ))}
     </div>
   );

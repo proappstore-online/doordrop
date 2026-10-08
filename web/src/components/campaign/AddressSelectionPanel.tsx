@@ -44,8 +44,35 @@ const AddressSelectionPanel: React.FC<AddressSelectionPanelProps> = ({
   onToggleManual,
   onDoorsGenerated,
 }) => {
+  const selectedCount = selectedDoorKeys.size;
+  const hasAddresses = availableAddresses.length > 0;
+
   return (
     <>
+      {/* Summary header */}
+      {(selectedCount > 0 || hasAddresses) && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/60 rounded-lg p-3 mb-4">
+          {selectedCount > 0 ? (
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+              ✓ Selected: <span className="font-bold">{selectedCount}</span> {selectedCount === 1 ? "location" : "locations"}
+              {currentStreet && <span className="text-emerald-800 dark:text-emerald-200"> on {currentStreet.streetName}</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-emerald-800 dark:text-emerald-200">
+              Select addresses from the list below to include them in your delivery area
+            </p>
+          )}
+        </div>
+      )}
+
+      {selectedCount === 0 && !hasAddresses && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/60 rounded-lg p-3 mb-4">
+          <p className="text-sm text-blue-900 dark:text-blue-200">
+            <strong>Tip:</strong> Search for a street above to see available addresses, then select which ones to deliver to.
+          </p>
+        </div>
+      )}
+
       <StreetSearch
         suburb={suburb}
         postcode={postcode}
