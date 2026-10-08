@@ -856,3 +856,322 @@ test.describe('Campaign assignment lifecycle', () => {
     // UI should not claim success when the server call fails
   });
 });
+
+// Campaign creation: validate inputs, handle geocoding, and show actionable errors
+test.describe('Campaign creation', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.addCookies([
+      {
+        name: '__Host-pas-session',
+        value: 'mock-session-token',
+        domain: 'localhost',
+        path: '/',
+        secure: false,
+        httpOnly: true,
+      },
+    ]);
+
+    // Mock auth as client
+    await page.route('**/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          user: { id: 'client-create-test', role: 'client', name: 'Test Client' },
+          needsRoleSelection: false,
+        }),
+      }),
+    );
+  });
+
+  test('successful campaign creation redirects to detail page', async ({ page }) => {
+    // Mock Nominatim geocoding success
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([{ lat: '-37.8136', lon: '144.9631' }]),
+      }),
+    );
+
+    // Mock campaign creation success
+    await page.route('**/v1/campaigns', (route) => {
+      if (route.request().method() === 'POST') {
+        const body = route.request().postData() || '{}';
+        const parsed = JSON.parse(body);
+        if (parsed.state && parsed.suburb && parsed.postcode && parsed.lat && parsed.lng) {
+          return route.fulfill({
+            status: 201,
+            body: JSON.stringify({ id: 'campaign-new-123', admin_ids: ['client-create-test'] }),
+          });
+        }
+      }
+      return route.fallthrough();
+    });
+
+    await page.goto('/app/new-campaign');
+
+    // Select state
+    await page.click('text=Select a state');
+    await page.click('text=Victoria');
+
+    // Enter suburb
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Melbourne');
+
+    // Enter postcode
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '3000');
+
+    // Submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify redirect to campaign detail page
+    await expect(page).toHaveURL('/app/campaign/campaign-new-123');
+  });
+
+  test('empty state shows validation error', async ({ page }) => {
+    await page.goto('/app/new-campaign');
+
+    // Leave state empty, fill others
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Melbourne');
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '3000');
+
+    // Submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify state error is shown
+    await expect(page.getByText('State is required')).toBeVisible();
+    // Should not navigate away
+    await expect(page).toHaveURL('/app/new-campaign');
+  });
+
+  test('empty suburb shows validation error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=New South Wales');
+
+    // Leave suburb empty
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '2000');
+
+    // Submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify suburb error is shown
+    await expect(page.getByText('Suburb is required')).toBeVisible();
+    await expect(page).toHaveURL('/app/new-campaign');
+  });
+
+  test('invalid postcode shows validation error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=Queensland');
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Brisbane');
+
+    // Enter invalid postcode (not 4 digits)
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', 'ABC');
+
+    // Submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify postcode error is shown
+    await expect(page.getByText('Postcode must be a 4-digit number')).toBeVisible();
+    await expect(page).toHaveURL('/app/new-campaign');
+  });
+
+  test('form state is preserved on validation error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=Victoria');
+
+    const suburb = 'Fitzroy';
+    const postcode = '3065';
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', suburb);
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', postcode);
+
+    // Submit without valid geocoding (to trigger an error)
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([]), // Empty result = geocoding failure
+      }),
+    );
+
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify error is shown
+    await expect(page.getByText(/could not verify that suburb and postcode/i)).toBeVisible();
+
+    // Verify form state is preserved
+    await expect(page.locator('input[aria-describedby="campaign-suburb-error"]')).toHaveValue(suburb);
+    await expect(page.locator('input[aria-describedby="campaign-postcode-error"]')).toHaveValue(postcode);
+  });
+
+  test('geocoding timeout shows actionable error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=South Australia');
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Adelaide');
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '5000');
+
+    // Mock timeout by never responding
+    await page.route('**/nominatim.openstreetmap.org/**', (route) => {
+      route.abort();
+    });
+
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify timeout error is shown
+    await expect(page.getByText(/location verification took too long/i)).toBeVisible();
+  });
+
+  test('geocoding unavailable shows actionable error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=Western Australia');
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Perth');
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '6000');
+
+    // Mock service unavailable
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 503,
+        body: 'Service Unavailable',
+      }),
+    );
+
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify unavailable error is shown
+    await expect(page.getByText(/location verification is temporarily unavailable/i)).toBeVisible();
+  });
+
+  test('unresolvable location shows actionable error', async ({ page }) => {
+    await page.click('text=Select a state');
+    await page.click('text=Tasmania');
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'InvalidSuburb123');
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '7000');
+
+    // Mock empty geocoding result
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([]),
+      }),
+    );
+
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify actionable error message
+    await expect(page.getByText(/could not verify that suburb and postcode.*check the state/i)).toBeVisible();
+  });
+
+  test('API failure shows error without losing form state', async ({ page }) => {
+    // Mock geocoding success
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([{ lat: '-31.9505', lon: '115.8605' }]),
+      }),
+    );
+
+    // Mock campaign creation failure
+    await page.route('**/v1/campaigns', (route) => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({
+          status: 500,
+          body: '{"error":"internal server error"}',
+        });
+      }
+      return route.fallthrough();
+    });
+
+    await page.click('text=Select a state');
+    await page.click('text=Northern Territory');
+
+    const suburb = 'Darwin';
+    const postcode = '0800';
+
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', suburb);
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', postcode);
+
+    // Submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify API error is shown
+    await expect(page.getByText(/could not create your campaign/i)).toBeVisible();
+
+    // Verify form state is preserved
+    await expect(page.locator('input[aria-describedby="campaign-suburb-error"]')).toHaveValue(suburb);
+    await expect(page.locator('input[aria-describedby="campaign-postcode-error"]')).toHaveValue(postcode);
+  });
+
+  test('duplicate submission is prevented', async ({ page }) => {
+    let createCount = 0;
+
+    // Mock geocoding success
+    await page.route('**/nominatim.openstreetmap.org/**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify([{ lat: '-33.8688', lon: '151.2093' }]),
+      }),
+    );
+
+    // Mock campaign creation with delay
+    await page.route('**/v1/campaigns', async (route) => {
+      if (route.request().method() === 'POST') {
+        createCount++;
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
+        return route.fulfill({
+          status: 201,
+          body: JSON.stringify({ id: 'campaign-new-456', admin_ids: ['client-create-test'] }),
+        });
+      }
+      return route.fallthrough();
+    });
+
+    await page.goto('/app/new-campaign');
+
+    // Select state
+    await page.click('text=Select a state');
+    await page.click('text=New South Wales');
+
+    // Enter location
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Sydney');
+    await page.fill('input[aria-describedby="campaign-postcode-error"]', '2000');
+
+    // Click submit and immediately click again (attempt duplicate submission)
+    const submitButton = page.locator('button:has-text("Create Campaign")');
+    await submitButton.click();
+    await submitButton.click();
+
+    // Wait for redirect (should only happen once)
+    await expect(page).toHaveURL('/app/campaign/campaign-new-456');
+
+    // Verify only one request was made
+    expect(createCount).toBe(1);
+  });
+
+  test('clearing form errors when fields change', async ({ page }) => {
+    await page.goto('/app/new-campaign');
+
+    // Leave all fields empty and submit
+    await page.click('button:has-text("Create Campaign")');
+
+    // Verify errors are shown
+    await expect(page.getByText('State is required')).toBeVisible();
+    await expect(page.getByText('Suburb is required')).toBeVisible();
+    await expect(page.getByText('Postcode is required')).toBeVisible();
+
+    // Change state - should clear errors
+    await page.click('text=Select a state');
+    await page.click('text=Victoria');
+
+    // State error should be gone, others remain
+    await expect(page.getByText('State is required')).not.toBeVisible();
+    await expect(page.getByText('Suburb is required')).toBeVisible();
+    await expect(page.getByText('Postcode is required')).toBeVisible();
+
+    // Fill suburb
+    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Geelong');
+
+    // Suburb error should be gone
+    await expect(page.getByText('Suburb is required')).not.toBeVisible();
+  });
+});

@@ -67,6 +67,39 @@ router.post('/campaigns', async (c) => {
   const status = (body.status as string) || 'draft';
   if (!VALID_STATUSES.has(status)) throw new HTTPException(400, { message: 'invalid status' });
 
+  // Validate location fields (if provided, they must be valid)
+  if (body.state !== undefined && body.state !== null) {
+    if (typeof body.state !== 'string' || body.state.trim().length === 0) {
+      throw new HTTPException(400, { message: 'state must be a non-empty string' });
+    }
+  }
+  if (body.suburb !== undefined && body.suburb !== null) {
+    if (typeof body.suburb !== 'string' || body.suburb.trim().length === 0) {
+      throw new HTTPException(400, { message: 'suburb must be a non-empty string' });
+    }
+  }
+  if (body.postcode !== undefined && body.postcode !== null) {
+    if (typeof body.postcode !== 'string' || !/^\d{4}$/.test(body.postcode.trim())) {
+      throw new HTTPException(400, { message: 'postcode must be a 4-digit number' });
+    }
+  }
+
+  // Validate coordinates (if provided, they must be finite numbers)
+  let lat: number | undefined;
+  let lng: number | undefined;
+  if (body.lat !== undefined && body.lat !== null) {
+    lat = typeof body.lat === 'number' ? body.lat : Number.parseFloat(String(body.lat));
+    if (!Number.isFinite(lat)) {
+      throw new HTTPException(400, { message: 'latitude must be a valid number' });
+    }
+  }
+  if (body.lng !== undefined && body.lng !== null) {
+    lng = typeof body.lng === 'number' ? body.lng : Number.parseFloat(String(body.lng));
+    if (!Number.isFinite(lng)) {
+      throw new HTTPException(400, { message: 'longitude must be a valid number' });
+    }
+  }
+
   // Creator is auto-added to admin_ids
   const adminIds = Array.isArray(body.admin_ids) ? (body.admin_ids as string[]) : [];
   if (!adminIds.includes(me.id)) adminIds.push(me.id);
@@ -91,8 +124,8 @@ router.post('/campaigns', async (c) => {
     total_doors: body.total_doors,
     budget: body.budget,
     due_date: body.due_date,
-    lat: body.lat,
-    lng: body.lng,
+    lat,
+    lng,
     door_radius_m: body.door_radius_m,
     junk_mail_policy: body.junk_mail_policy,
     property_filter: body.property_filter,
