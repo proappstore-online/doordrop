@@ -194,9 +194,9 @@
     },
     {
       "name": "create_campaign",
-      "description": "Create a campaign; the caller must be one of its admin_ids",
+      "description": "Create a campaign; the caller must be a client or admin and one of its admin_ids",
       "operation": "execute",
-      "sql": "INSERT INTO campaigns (id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at) SELECT :id, :name, :name_key, :street_name, :suburb, :postcode, :state, :country, :plan_type, :status, :admin_ids, :member_ids, :assigned_walker_id, :schedule_rule, :user_payment, :total_doors, :budget, :due_date, :lat, :lng, :door_radius_m, :junk_mail_policy, :property_filter, :business_categories, :active_printout_id, :job_status, :__now, :__now WHERE EXISTS (SELECT 1 FROM json_each(:admin_ids) j WHERE j.value = :__user_id)",
+      "sql": "INSERT INTO campaigns (id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at) SELECT :id, :name, :name_key, :street_name, :suburb, :postcode, :state, :country, :plan_type, :status, :admin_ids, :member_ids, :assigned_walker_id, :schedule_rule, :user_payment, :total_doors, :budget, :due_date, :lat, :lng, :door_radius_m, :junk_mail_policy, :property_filter, :business_categories, :active_printout_id, :job_status, :__now, :__now WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = :__user_id AND u.role IN ('client', 'admin')) AND EXISTS (SELECT 1 FROM json_each(:admin_ids) j WHERE j.value = :__user_id)",
       "params": {
         "id": {
           "type": "string"

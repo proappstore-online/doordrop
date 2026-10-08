@@ -52,6 +52,13 @@ router.get('/campaigns', async (c) => {
 });
 
 router.post('/campaigns', async (c) => {
+  const me = await whoami(c);
+
+  // Only clients and app admins can create campaigns
+  if (me.role !== 'client' && me.role !== 'admin') {
+    throw new HTTPException(403, { message: 'client role required' });
+  }
+
   const body = await c.req.json<Record<string, unknown>>();
 
   if (typeof body.name !== 'string' || body.name.length === 0) {
@@ -61,7 +68,6 @@ router.post('/campaigns', async (c) => {
   if (!VALID_STATUSES.has(status)) throw new HTTPException(400, { message: 'invalid status' });
 
   // Creator is auto-added to admin_ids
-  const me = await whoami(c);
   const adminIds = Array.isArray(body.admin_ids) ? (body.admin_ids as string[]) : [];
   if (!adminIds.includes(me.id)) adminIds.push(me.id);
 

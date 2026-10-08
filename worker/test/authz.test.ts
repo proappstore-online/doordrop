@@ -513,6 +513,35 @@ describe('walker role enforcement', () => {
   });
 });
 
+describe('campaign creation role enforcement', () => {
+  it('only clients and admins can create campaigns', async () => {
+    // Walkers cannot create campaigns
+    const walkerCreateRes = await req(WALKER_1, 'POST', '/v1/campaigns', { name: 'Walker Campaign' });
+    expect(walkerCreateRes.status).toBe(403);
+
+    // Clients can create campaigns
+    const clientCreateRes = await req(CLIENT_2, 'POST', '/v1/campaigns', { name: 'Client Campaign' });
+    expect(clientCreateRes.status).toBe(201);
+    expect(clientCreateRes.body.id).toBeDefined();
+
+    // Admins can create campaigns
+    const adminCreateRes = await req(ADMIN, 'POST', '/v1/campaigns', { name: 'Admin Campaign' });
+    expect(adminCreateRes.status).toBe(201);
+    expect(adminCreateRes.body.id).toBeDefined();
+
+    // Direct action calls also enforce the role check
+    const walkerDirectCreate = await direct(WALKER_2, 'create_campaign', { id: 'c_walker', name: 'Direct Walker Campaign', admin_ids: JSON.stringify([WALKER_2]), status: 'draft' });
+    expect(walkerDirectCreate.meta.changes).toBe(0);
+
+    // Clients and admins can create via direct action
+    const clientDirectCreate = await direct(CLIENT_1, 'create_campaign', { id: 'c_client', name: 'Direct Client Campaign', admin_ids: JSON.stringify([CLIENT_1]), status: 'draft' });
+    expect(clientDirectCreate.meta.changes).toBe(1);
+
+    const adminDirectCreate = await direct(ADMIN, 'create_campaign', { id: 'c_admin', name: 'Direct Admin Campaign', admin_ids: JSON.stringify([ADMIN]), status: 'draft' });
+    expect(adminDirectCreate.meta.changes).toBe(1);
+  });
+});
+
 describe('admin area', () => {
   it('stats, all-doors and campaign status are app-admin only, through the worker and the actions', async () => {
     for (const user of [CLIENT_1, WALKER_1]) {
