@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { PrintoutRepository } from "../repositories/printoutRepository";
 import { FlyerRepository, type FlyerWithId } from "../repositories/flyerRepository";
+import { CampaignRepository } from "../repositories/campaignRepository";
 import type { PrintoutData } from "../models/printout";
+import type { CampaignData } from "../models/campaign";
 import { uploadFile } from "../utils/storageUpload";
 
 export interface UsePrintoutManagementReturn {
@@ -15,6 +17,7 @@ export interface UsePrintoutManagementReturn {
   flyersLoading: boolean;
   selectedFlyerId: string;
   savingPrintout: boolean;
+  printoutError: string | null;
 
   // Setters
   setShowPrintoutForm: (show: boolean) => void;
@@ -23,6 +26,7 @@ export interface UsePrintoutManagementReturn {
   setPrintoutFile: (file: File | null) => void;
   setPrintoutFilePreview: (preview: string | null) => void;
   selectFlyer: (flyerId: string) => void;
+  dismissError: () => void;
 
   // Handler
   handleCreatePrintout: (e: React.FormEvent) => Promise<void>;
@@ -31,7 +35,9 @@ export interface UsePrintoutManagementReturn {
 export function usePrintoutManagement(
   campaignId: string | undefined,
   currentUserId: string | undefined,
-  setPrintouts: React.Dispatch<React.SetStateAction<(PrintoutData & { id: string })[]>>
+  setPrintouts: React.Dispatch<React.SetStateAction<(PrintoutData & { id: string })[]>>,
+  currentActivePrintoutId?: string | null,
+  onCampaignUpdate?: (update: Partial<CampaignData>) => void
 ): UsePrintoutManagementReturn {
   const [showPrintoutForm, setShowPrintoutForm] = useState(false);
   const [printoutName, setPrintoutName] = useState("");
@@ -42,6 +48,7 @@ export function usePrintoutManagement(
   const [flyers, setFlyers] = useState<FlyerWithId[]>([]);
   const [flyersLoading, setFlyersLoading] = useState(false);
   const [selectedFlyerId, setSelectedFlyerId] = useState("");
+  const [printoutError, setPrintoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -83,6 +90,7 @@ export function usePrintoutManagement(
     e.preventDefault();
     if (!campaignId || !currentUserId || !printoutName.trim()) return;
     setSavingPrintout(true);
+    setPrintoutError(null);
     try {
       const selectedFlyer = flyers.find((flyer) => flyer.id === selectedFlyerId);
       let fileUrl = selectedFlyer?.fileUrl;
@@ -98,9 +106,26 @@ export function usePrintoutManagement(
       if (printoutDesc.trim()) printoutData.description = printoutDesc.trim();
       if (fileUrl) printoutData.fileUrl = fileUrl;
       if (selectedFlyer) printoutData.flyerId = selectedFlyer.id;
-      await PrintoutRepository.createVersion(campaignId, printoutData as any);
+
+      // Create the printout
+      const printoutId = await PrintoutRepository.createVersion(campaignId, printoutData as any);
       const updated = await PrintoutRepository.getVersions(campaignId);
       setPrintouts(updated);
+
+      // If this is the first printout and no active flyer is set, make it active
+      if (updated.length === 1 && !currentActivePrintoutId) {
+        try {
+          await CampaignRepository.updateGroup(campaignId, { activePrintoutId: printoutId });
+          if (onCampaignUpdate) {
+            onCampaignUpdate({ activePrintoutId: printoutId });
+          }
+        } catch (updateErr) {
+          console.error("Failed to set first flyer as active:", updateErr);
+          // Don't block the flow if activation fails; the user can manually select it
+          setPrintoutError("We couldn't automatically activate the flyer as default, but it was saved. You can select it manually.");
+        }
+      }
+
       setPrintoutName("");
       setPrintoutDesc("");
       setPrintoutFile(null);
@@ -109,6 +134,7 @@ export function usePrintoutManagement(
       setShowPrintoutForm(false);
     } catch (err) {
       console.error("Failed to create printout version:", err);
+      setPrintoutError("We couldn't save this flyer. Please try again.");
     } finally {
       setSavingPrintout(false);
     }
@@ -124,12 +150,14 @@ export function usePrintoutManagement(
     flyersLoading,
     selectedFlyerId,
     savingPrintout,
+    printoutError,
     setShowPrintoutForm,
     setPrintoutName,
     setPrintoutDesc,
     setPrintoutFile,
     setPrintoutFilePreview,
     selectFlyer,
+    dismissError: () => setPrintoutError(null),
     handleCreatePrintout,
   };
 }

@@ -14,6 +14,7 @@ interface PrintoutManagerProps {
   selectedFlyerId: string;
   saving: boolean;
   isCampaignClosed: boolean;
+  error: string | null;
   onToggleForm: () => void;
   onNameChange: (value: string) => void;
   onDescChange: (value: string) => void;
@@ -21,6 +22,7 @@ interface PrintoutManagerProps {
   onFlyerSelect: (flyerId: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  onDismissError?: () => void;
 }
 
 const PrintoutManager: React.FC<PrintoutManagerProps> = ({
@@ -35,6 +37,7 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
   selectedFlyerId,
   saving,
   isCampaignClosed,
+  error,
   onToggleForm,
   onNameChange,
   onDescChange,
@@ -42,6 +45,7 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
   onFlyerSelect,
   onSubmit,
   onCancel,
+  onDismissError,
 }) => {
   const selectedFlyer = flyers.find((flyer) => flyer.id === selectedFlyerId);
 
@@ -55,6 +59,39 @@ const PrintoutManager: React.FC<PrintoutManagerProps> = ({
 
   return (
     <div>
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <div className="flex gap-2">
+            <svg
+              className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div className="flex-1">
+              <p>{error}</p>
+            </div>
+            {onDismissError && (
+              <button
+                type="button"
+                onClick={onDismissError}
+                className="flex-shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Flyers ({printouts.length})

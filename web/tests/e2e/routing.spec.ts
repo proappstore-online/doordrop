@@ -1654,6 +1654,321 @@ test.describe('Campaign active flyer management', () => {
   });
 });
 
+// Automatic flyer activation: creating the first flyer should make it active
+test.describe('Campaign flyer automatic activation on creation', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.addCookies([
+      {
+        name: '__Host-pas-session',
+        value: 'mock-session-token',
+        domain: 'localhost',
+        path: '/',
+        secure: false,
+        httpOnly: true,
+      },
+    ]);
+
+    // Mock auth as client
+    await page.route('**/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          user: { id: 'client-auto-flyer-test', role: 'client', name: 'Test Client' },
+          needsRoleSelection: false,
+        }),
+      }),
+    );
+  });
+
+  test('creating first flyer automatically sets it as active', async ({ page }) => {
+    // Mock campaign with no flyers and no active flyer
+    const mockCampaign = {
+      id: 'campaign-auto-1',
+      name: 'Auto Test Campaign',
+      status: 'draft',
+      adminIds: ['client-auto-flyer-test'],
+      activePrintoutId: undefined,
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    let printouts: any[] = [];
+
+    await page.route('**/v1/campaigns/campaign-auto-1', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        if ('active_printout_id' in body) {
+          mockCampaign.activePrintoutId = body.active_printout_id;
+        }
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-auto-1/printouts', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(printouts) });
+      }
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const newPrintout = {
+          id: `printout-${Date.now()}`,
+          name: body.name,
+          description: body.description,
+          version: body.version,
+          createdAt: Date.now(),
+          createdBy: body.created_by,
+        };
+        printouts.push(newPrintout);
+        return route.fulfill({ status: 200, body: JSON.stringify(newPrintout) });
+      }
+      return route.fallthrough();
+    });
+
+    // Mock flyer library (empty)
+    await page.route('**/v1/flyers*', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) }),
+    );
+
+    await page.goto('/app/campaign/campaign-auto-1');
+
+    // Open flyer form
+    await page.getByRole('button', { name: /\+ Add Flyer/i }).click();
+    await expect(page.locator('input[placeholder="e.g. Summer Sale, Grand Opening..."]')).toBeVisible();
+
+    // Fill form
+    await page.fill('input[placeholder="e.g. Summer Sale, Grand Opening..."]', 'First Flyer');
+    await page.fill('input[placeholder="Any details about this flyer..."]', 'My first flyer');
+
+    // Mock file upload
+    const fileInput = page.locator('input[type="file"]');
+    const buffer = Buffer.from('fake image data');
+    await fileInput.setInputFiles({
+      name: 'test.jpg',
+      mimeType: 'image/jpeg',
+      buffer,
+    });
+
+    // Wait for preview to show
+    await page.waitForSelector('img[alt="Preview"]');
+
+    // Submit
+    await page.getByRole('button', { name: /Save Flyer/i }).click();
+
+    // Wait for the update calls to complete and verify active flyer is set
+    await page.waitForTimeout(500);
+
+    // Verify the flyer list shows the new flyer
+    await expect(page.getByText('First Flyer')).toBeVisible();
+
+    // Verify the PrintoutSelector shows the flyer is selected
+    const flyerSelect = page.locator('select').first();
+    await expect(flyerSelect).toHaveValue(printouts[0]!.id);
+  });
+
+  test('creating second flyer preserves already-active flyer selection', async ({ page }) => {
+    // Mock campaign with one printout already active
+    const mockCampaign = {
+      id: 'campaign-auto-2',
+      name: 'Auto Test Campaign 2',
+      status: 'draft',
+      adminIds: ['client-auto-flyer-test'],
+      activePrintoutId: 'printout-1-existing',
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    const printouts = [
+      {
+        id: 'printout-1-existing',
+        name: 'First Flyer',
+        version: 1,
+        createdAt: Date.now(),
+        createdBy: 'client-auto-flyer-test',
+      },
+    ];
+
+    await page.route('**/v1/campaigns/campaign-auto-2', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        if ('active_printout_id' in body) {
+          mockCampaign.activePrintoutId = body.active_printout_id;
+        }
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    let postCount = 0;
+    await page.route('**/v1/campaigns/campaign-auto-2/printouts', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(printouts) });
+      }
+      if (route.request().method() === 'POST') {
+        postCount++;
+        const body = JSON.parse(route.request().postData() || '{}');
+        const newPrintout = {
+          id: `printout-${postCount}-new`,
+          name: body.name,
+          description: body.description,
+          version: body.version,
+          createdAt: Date.now(),
+          createdBy: body.created_by,
+        };
+        printouts.push(newPrintout);
+        return route.fulfill({ status: 200, body: JSON.stringify(newPrintout) });
+      }
+      return route.fallthrough();
+    });
+
+    // Mock flyer library (empty)
+    await page.route('**/v1/flyers*', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) }),
+    );
+
+    await page.goto('/app/campaign/campaign-auto-2');
+
+    // Verify first flyer is already shown as active
+    await expect(page.getByText('First Flyer')).toBeVisible();
+    const flyerSelect = page.locator('select').first();
+    await expect(flyerSelect).toHaveValue('printout-1-existing');
+
+    // Open flyer form to add a second flyer
+    await page.getByRole('button', { name: /\+ Add Flyer/i }).click();
+
+    // Fill form
+    await page.fill('input[placeholder="e.g. Summer Sale, Grand Opening..."]', 'Second Flyer');
+
+    // Mock file upload
+    const fileInput = page.locator('input[type="file"]');
+    const buffer = Buffer.from('fake image data');
+    await fileInput.setInputFiles({
+      name: 'test2.jpg',
+      mimeType: 'image/jpeg',
+      buffer,
+    });
+
+    // Wait for preview
+    await page.waitForSelector('img[alt="Preview"]');
+
+    // Submit
+    await page.getByRole('button', { name: /Save Flyer/i }).click();
+
+    await page.waitForTimeout(500);
+
+    // Verify the second flyer was added
+    await expect(page.getByText('Second Flyer')).toBeVisible();
+
+    // Verify the first flyer is STILL selected (not replaced)
+    await expect(flyerSelect).toHaveValue('printout-1-existing');
+  });
+
+  test('automatic activation failure shows recoverable error', async ({ page }) => {
+    // Mock campaign with no flyers
+    const mockCampaign = {
+      id: 'campaign-auto-3',
+      name: 'Auto Test Campaign 3',
+      status: 'draft',
+      adminIds: ['client-auto-flyer-test'],
+      activePrintoutId: undefined,
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    let printouts: any[] = [];
+    let shouldFailActivation = true;
+
+    await page.route('**/v1/campaigns/campaign-auto-3', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        // Fail the first activation attempt
+        if (shouldFailActivation) {
+          shouldFailActivation = false;
+          return route.fulfill({
+            status: 500,
+            body: JSON.stringify({ error: 'Server error' }),
+          });
+        }
+        const body = JSON.parse(route.request().postData() || '{}');
+        if ('active_printout_id' in body) {
+          mockCampaign.activePrintoutId = body.active_printout_id;
+        }
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-auto-3/printouts', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(printouts) });
+      }
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const newPrintout = {
+          id: `printout-auto-fail-${Date.now()}`,
+          name: body.name,
+          version: body.version,
+          createdAt: Date.now(),
+          createdBy: body.created_by,
+        };
+        printouts.push(newPrintout);
+        return route.fulfill({ status: 200, body: JSON.stringify(newPrintout) });
+      }
+      return route.fallthrough();
+    });
+
+    // Mock flyer library (empty)
+    await page.route('**/v1/flyers*', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) }),
+    );
+
+    await page.goto('/app/campaign/campaign-auto-3');
+
+    // Open and fill flyer form
+    await page.getByRole('button', { name: /\+ Add Flyer/i }).click();
+    await page.fill('input[placeholder="e.g. Summer Sale, Grand Opening..."]', 'Recovery Test Flyer');
+
+    // Mock file upload
+    const fileInput = page.locator('input[type="file"]');
+    const buffer = Buffer.from('fake image data');
+    await fileInput.setInputFiles({
+      name: 'test.jpg',
+      mimeType: 'image/jpeg',
+      buffer,
+    });
+
+    await page.waitForSelector('img[alt="Preview"]');
+
+    // Submit
+    await page.getByRole('button', { name: /Save Flyer/i }).click();
+
+    // Wait for submission
+    await page.waitForTimeout(500);
+
+    // Flyer should still be created despite activation error
+    await expect(page.getByText('Recovery Test Flyer')).toBeVisible();
+
+    // Error should be shown about activation failure
+    await expect(page.getByText(/couldn't automatically activate the flyer/i)).toBeVisible();
+
+    // User can dismiss the error
+    const dismissButton = page.locator('div[role="alert"] button').first();
+    await dismissButton.click();
+    await expect(page.getByText(/couldn't automatically activate the flyer/i)).not.toBeVisible();
+  });
+});
+
 // Canary test: verifies that the E2E infrastructure catches test failures.
 // This test is designed to FAIL when run locally during development (skipped by default).
 // In CI, it should PASS. If this test fails in CI, it proves the E2E pipeline is working.

@@ -119,7 +119,13 @@ const ClientCampaignDetailPage: React.FC = () => {
   const canEditDoors = (isAdmin || (isAssignedWalker && isTracking)) && !isCampaignClosed;
 
   const doorManagement = useDoorManagement(campaignId, currentUser?.id, campaign, doors, setDoors);
-  const printoutManagement = usePrintoutManagement(campaignId, currentUser?.id, setPrintouts);
+  const printoutManagement = usePrintoutManagement(
+    campaignId,
+    currentUser?.id,
+    setPrintouts,
+    campaign?.activePrintoutId,
+    (update) => setCampaign((prev) => (prev ? { ...prev, ...update } : prev))
+  );
   const walkerInterest = useWalkerInterest(
     campaignId,
     currentUser?.id,
@@ -716,6 +722,7 @@ const ClientCampaignDetailPage: React.FC = () => {
           selectedFlyerId={printoutManagement.selectedFlyerId}
           saving={printoutManagement.savingPrintout}
           isCampaignClosed={isCampaignClosed}
+          error={printoutManagement.printoutError}
           onToggleForm={() => printoutManagement.setShowPrintoutForm(!printoutManagement.showPrintoutForm)}
           onNameChange={printoutManagement.setPrintoutName}
           onDescChange={printoutManagement.setPrintoutDesc}
@@ -726,6 +733,7 @@ const ClientCampaignDetailPage: React.FC = () => {
           onFlyerSelect={printoutManagement.selectFlyer}
           onSubmit={printoutManagement.handleCreatePrintout}
           onCancel={() => printoutManagement.setShowPrintoutForm(false)}
+          onDismissError={printoutManagement.dismissError}
         />
       )}
 
