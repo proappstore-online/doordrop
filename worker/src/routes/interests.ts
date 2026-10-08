@@ -1,15 +1,29 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { requireOwner } from '../auth.js';
+import { campaignAccess, requireCampaignAdmin, requireOwner, whoami } from '../auth.js';
 import { call, first, rows, run, type AppEnv } from '../pas.js';
 import { newId } from '../lib.js';
 
 const router = new Hono<AppEnv>();
 
 router.get('/interests', async (c) => {
+  const me = await whoami(c);
+  const campaignId = c.req.query('campaignId');
+  const walkerId = c.req.query('walkerId');
+
+  // If filtering by campaign, user must be campaign admin.
+  if (campaignId) {
+    await requireCampaignAdmin(c, campaignId);
+  }
+
+  // If filtering by walker, user must be admin or self.
+  if (walkerId && walkerId !== me.id && me.role !== 'admin') {
+    throw new HTTPException(403, { message: 'can only query your own interests' });
+  }
+
   return c.json(await rows(c, 'list_interests', {
-    walker_id: c.req.query('walkerId') || undefined,
-    campaign_id: c.req.query('campaignId') || undefined,
+    walker_id: walkerId || undefined,
+    campaign_id: campaignId || undefined,
   }));
 });
 

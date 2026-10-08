@@ -24,6 +24,7 @@ const ALLOWED = [
 ] as const;
 
 router.get('/users/:id', async (c) => {
+  // User profiles are publicly readable (marked caller_unscoped in mcp.json)
   const row = await first(c, 'get_user', { id: c.req.param('id') });
   if (!row) throw new HTTPException(404, { message: 'user not found' });
   return c.json(hydrateUser(row));
@@ -60,6 +61,7 @@ router.patch('/users/:id', async (c) => {
 });
 
 router.get('/users', async (c) => {
+  await requireAdmin(c);
   const result = await rows(c, 'list_users', {
     role: c.req.query('role') || undefined,
     campaign_id: c.req.query('campaignId') || undefined,

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { campaignAccess, requireCampaignAdmin } from '../auth.js';
+import { campaignAccess, requireCampaignAdmin, requireCampaignParticipant } from '../auth.js';
 import { batch, rows, run, type AppEnv, type Row } from '../pas.js';
 import { fromJson, newId, pickDefined } from '../lib.js';
 
@@ -27,7 +27,9 @@ function doorParams(campaignId: string, d: Record<string, unknown>) {
 }
 
 router.get('/campaigns/:campaignId/doors', async (c) => {
-  const result = await rows(c, 'list_doors', { campaign_id: c.req.param('campaignId') });
+  const campaignId = c.req.param('campaignId');
+  await requireCampaignParticipant(c, campaignId);
+  const result = await rows(c, 'list_doors', { campaign_id: campaignId });
   return c.json(result.map(hydrate));
 });
 

@@ -6,9 +6,10 @@ import { newId } from '../lib.js';
 
 const router = new Hono<AppEnv>();
 
-// Reads are scoped in the action: campaign admin or the booked walker.
+// Campaign admin or booked walker only (scoped in the action via :__user_id)
 router.get('/campaigns/:campaignId/bookings', async (c) => {
-  return c.json(await rows(c, 'list_campaign_bookings', { campaign_id: c.req.param('campaignId') }));
+  const campaignId = c.req.param('campaignId');
+  return c.json(await rows(c, 'list_campaign_bookings', { campaign_id: campaignId }));
 });
 
 router.post('/campaigns/:campaignId/bookings', async (c) => {

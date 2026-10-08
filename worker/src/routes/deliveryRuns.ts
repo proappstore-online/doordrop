@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { campaignAccess, requireCampaignAdmin } from '../auth.js';
+import { campaignAccess, requireCampaignAdmin, requireCampaignParticipant } from '../auth.js';
 import { first, rows, run, type AppEnv } from '../pas.js';
 import { newId } from '../lib.js';
 
@@ -20,6 +20,14 @@ router.get('/campaigns/:campaignId/delivery-runs', async (c) => {
 router.get('/delivery-runs/:id', async (c) => {
   const row = await first(c, 'get_delivery_run', { id: c.req.param('id') });
   if (!row) throw new HTTPException(404, { message: 'delivery run not found' });
+  // Check authorization based on campaign_id from the delivery run
+  const campaignId = row.campaign_id as string;
+  if (campaignId) {
+    const access = await campaignAccess(c, campaignId);
+    if (!access || !(access.is_admin || access.is_walker || access.is_platform_admin)) {
+      throw new HTTPException(403, { message: 'campaign-admin or assigned-walker only' });
+    }
+  }
   return c.json(row);
 });
 

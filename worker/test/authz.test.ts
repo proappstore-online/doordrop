@@ -90,7 +90,9 @@ describe('a client cannot edit another client\'s campaign', () => {
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { admin_ids: 'x' })).status).toBe(400);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { status: 'bogus' })).status).toBe(400);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_2, budget: 50 })).status).toBe(200);
-    const campaign = (await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}`)).body;
+    // Verify edit succeeded: only campaign admin can read full details (non-participants get 403)
+    expect((await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}`)).status).toBe(403);
+    const campaign = (await req(CLIENT_1, 'GET', `/v1/campaigns/${campaignId}`)).body;
     expect(campaign).toMatchObject({ assigned_walker_id: WALKER_2, budget: 50, admin_ids: [CLIENT_1], member_ids: [] });
     const notes = (await req(WALKER_2, 'GET', '/v1/notifications')).body;
     expect(notes).toHaveLength(1);

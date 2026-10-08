@@ -58,3 +58,30 @@ export async function requireOwner(c: Ctx, ownerAction: string, id: string, notF
   if (!row) throw new HTTPException(404, { message: notFound });
   if (!row.mine) throw new HTTPException(403, { message: forbidden });
 }
+
+/** Public campaign projection: safe fields for unauthenticated or non-participant reads */
+export function publicCampaign(campaign: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: campaign.id,
+    name: campaign.name,
+    description: campaign.description,
+    status: campaign.status,
+    suburb: campaign.suburb,
+    postcode: campaign.postcode,
+    state: campaign.state,
+    created_at: campaign.created_at,
+    total_doors: campaign.total_doors,
+    budget: campaign.budget,
+    due_date: campaign.due_date,
+  };
+}
+
+/** Check if user is a campaign participant: admin or assigned walker (or platform admin). */
+export async function requireCampaignParticipant(c: Ctx, campaignId: string): Promise<CampaignAccess> {
+  const access = await campaignAccess(c, campaignId);
+  if (!access) throw new HTTPException(404, { message: 'campaign not found' });
+  if (!access.is_admin && !access.is_walker && !access.is_platform_admin) {
+    throw new HTTPException(403, { message: 'campaign-admin or assigned-walker required' });
+  }
+  return access;
+}

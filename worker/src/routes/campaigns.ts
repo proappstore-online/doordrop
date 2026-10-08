@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { requireCampaignAdmin, whoami } from '../auth.js';
+import { requireCampaignAdmin, requireCampaignParticipant, whoami } from '../auth.js';
 import { batch, first, rows, run, type AppEnv, type Params, type Row } from '../pas.js';
 import { fromJson, newId, pickDefined, toJson } from '../lib.js';
 
@@ -20,6 +20,7 @@ function hydrate(row: Row): Row {
 }
 
 router.get('/campaigns', async (c) => {
+  const me = await whoami(c);
   const status = c.req.query('status');
   let statuses: string | undefined;
   if (status) {
@@ -27,10 +28,23 @@ router.get('/campaigns', async (c) => {
     if (valid.length === 0) throw new HTTPException(400, { message: 'invalid status filter' });
     statuses = JSON.stringify(valid);
   }
+
+  // Only admins can filter other users' campaigns or browse all campaigns.
+  // Regular users can only query their own campaigns via admin_id or walker_id.
+  const adminId = c.req.query('adminId');
+  const walkerId = c.req.query('walkerId');
+
+  if (!me.role || me.role !== 'admin') {
+    // Non-admin users can only see campaigns they're involved in.
+    if ((adminId && adminId !== me.id) || (walkerId && walkerId !== me.id)) {
+      throw new HTTPException(403, { message: 'can only query your own campaigns' });
+    }
+  }
+
   const result = await rows(c, 'list_campaigns', {
     statuses,
-    admin_id: c.req.query('adminId') || undefined,
-    walker_id: c.req.query('walkerId') || undefined,
+    admin_id: adminId || undefined,
+    walker_id: walkerId || undefined,
     suburb: c.req.query('suburb') || undefined,
     postcode: c.req.query('postcode') || undefined,
   });
@@ -84,7 +98,9 @@ router.post('/campaigns', async (c) => {
 });
 
 router.get('/campaigns/:id', async (c) => {
-  const row = await first(c, 'get_campaign', { id: c.req.param('id') });
+  const campaignId = c.req.param('id');
+  await requireCampaignParticipant(c, campaignId);
+  const row = await first(c, 'get_campaign', { id: campaignId });
   if (!row) throw new HTTPException(404, { message: 'campaign not found' });
   return c.json(hydrate(row));
 });

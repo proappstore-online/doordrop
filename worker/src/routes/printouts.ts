@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { requireCampaignAdmin } from '../auth.js';
+import { requireCampaignAdmin, requireCampaignParticipant } from '../auth.js';
 import { rows, run, type AppEnv } from '../pas.js';
 import { newId, pickDefined } from '../lib.js';
 
 const router = new Hono<AppEnv>();
 
 router.get('/campaigns/:campaignId/printouts', async (c) => {
-  return c.json(await rows(c, 'list_printouts', { campaign_id: c.req.param('campaignId') }));
+  const campaignId = c.req.param('campaignId');
+  await requireCampaignAdmin(c, campaignId);
+  return c.json(await rows(c, 'list_printouts', { campaign_id: campaignId }));
 });
 
 router.post('/campaigns/:campaignId/printouts', async (c) => {

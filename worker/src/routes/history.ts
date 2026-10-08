@@ -7,7 +7,15 @@ import { newId } from '../lib.js';
 const router = new Hono<AppEnv>();
 
 router.get('/history', async (c) => {
-  return c.json(await rows(c, 'list_history', { walker_id: c.req.query('walkerId') || undefined }));
+  const me = await whoami(c);
+  const walkerId = c.req.query('walkerId');
+
+  // Non-admins can only query their own history.
+  if (walkerId && walkerId !== me.id && me.role !== 'admin') {
+    throw new HTTPException(403, { message: 'can only query your own history' });
+  }
+
+  return c.json(await rows(c, 'list_history', { walker_id: walkerId || undefined }));
 });
 
 router.post('/history', async (c) => {
