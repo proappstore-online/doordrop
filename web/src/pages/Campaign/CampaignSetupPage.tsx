@@ -2,6 +2,8 @@ import React, { useRef, useState } from "react";
 import Select from "react-select";
 import { useNavigate } from "react-router-dom";
 import { CampaignRepository } from "../../repositories/campaignRepository";
+import { FlyerRepository, type FlyerWithId } from "../../repositories/flyerRepository";
+import { PrintoutRepository } from "../../repositories/printoutRepository";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { AU_STATE_CITY_MAP } from "../../data/countryData";
 
@@ -18,7 +20,13 @@ const CampaignSetupPage: React.FC = () => {
   const [stateError, setStateError] = useState<string | null>(null);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showFlyerPrompt, setShowFlyerPrompt] = useState(false);
+  const [availableFlyers, setAvailableFlyers] = useState<FlyerWithId[]>([]);
+  const [selectedFlyer, setSelectedFlyer] = useState<FlyerWithId | null>(null);
+  const [linkingFlyer, setLinkingFlyer] = useState(false);
+  const [flyerError, setFlyerError] = useState<string | null>(null);
   const submissionInFlight = useRef(false);
+  const pendingCampaignId = useRef<string | null>(null);
 
   const validateState = (value: string) => {
     if (!value) return "State is required";
@@ -41,6 +49,42 @@ const CampaignSetupPage: React.FC = () => {
   };
 
   const collapseSpaces = (s: string) => s.trim().replace(/\s+/g, " ");
+
+  const handleSelectFlyer = async () => {
+    if (!selectedFlyer || !pendingCampaignId.current || !currentUser) {
+      setFlyerError("No flyer selected");
+      return;
+    }
+
+    setLinkingFlyer(true);
+    setFlyerError(null);
+    try {
+      const printoutId = await PrintoutRepository.createVersion(pendingCampaignId.current, {
+        name: selectedFlyer.name,
+        description: selectedFlyer.description,
+        fileUrl: selectedFlyer.fileUrl,
+        flyerId: selectedFlyer.id,
+        createdAt: new Date(),
+        createdBy: currentUser.id,
+      });
+
+      await CampaignRepository.updateGroup(pendingCampaignId.current, {
+        activePrintoutId: printoutId,
+      });
+
+      navigate(`/app/campaign/${pendingCampaignId.current}`);
+    } catch (err) {
+      console.error("Failed to select flyer", err);
+      setFlyerError("Failed to attach flyer to campaign. Please try again.");
+    } finally {
+      setLinkingFlyer(false);
+    }
+  };
+
+  const handleSkipFlyer = () => {
+    if (!pendingCampaignId.current) return;
+    navigate(`/app/campaign/${pendingCampaignId.current}`);
+  };
 
   const handleCreate = async () => {
     if (submissionInFlight.current) return;
@@ -122,6 +166,20 @@ const CampaignSetupPage: React.FC = () => {
         lat,
         lng,
       } as any);
+
+      // Fetch user's flyers to show selection prompt
+      try {
+        const flyers = await FlyerRepository.getFlyers(currentUser.id);
+        const activeFlyers = flyers.filter((f) => !f.archivedAt);
+        if (activeFlyers.length > 0) {
+          setAvailableFlyers(activeFlyers);
+          setShowFlyerPrompt(true);
+          pendingCampaignId.current = groupId;
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch flyers for prompt", err);
+      }
 
       navigate(`/app/campaign/${groupId}`);
     } catch (err) {
@@ -275,6 +333,74 @@ const CampaignSetupPage: React.FC = () => {
           Your campaign will be created as a draft. You can add streets, set a budget, and publish it when ready.
         </p>
       </div>
+
+      {showFlyerPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-md w-full">
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Attach a Flyer?
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Your campaign is ready. Would you like to select a flyer from your library to attach it now?
+              </p>
+
+              {flyerError && (
+                <p className="text-sm text-red-500 mb-4" role="alert">
+                  {flyerError}
+                </p>
+              )}
+
+              <div className="mb-4 max-h-64 overflow-y-auto">
+                <div className="space-y-2">
+                  {availableFlyers.map((flyer) => (
+                    <label
+                      key={flyer.id}
+                      className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="flyer-selection"
+                        value={flyer.id}
+                        checked={selectedFlyer?.id === flyer.id}
+                        onChange={() => setSelectedFlyer(flyer)}
+                        className="mt-1 mr-3"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {flyer.name}
+                        </p>
+                        {flyer.description && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                            {flyer.description}
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSkipFlyer}
+                  disabled={linkingFlyer}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  Skip for Now
+                </button>
+                <button
+                  onClick={handleSelectFlyer}
+                  disabled={!selectedFlyer || linkingFlyer}
+                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                >
+                  {linkingFlyer ? "Attaching..." : "Attach Flyer"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
