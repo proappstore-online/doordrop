@@ -5,7 +5,8 @@ import { fromWire } from '../lib/transform';
 export type NotificationWithId = NotificationData & { id: string };
 
 export const NotificationRepository = {
-  // TODO(task #11): port to fas.rooms `notifications:{userId}` for push. Polling for now.
+  // TODO(task #11): port to fas.rooms `notifications:{userId}` for true real-time.
+  // Polling for now; rooms integration handled at page level via useApp() hook.
   subscribe(
     _userId: string,
     callback: (notifications: NotificationWithId[]) => void,

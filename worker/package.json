@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@proappstore/sdk": "^1.16.66",
+    "@proappstore/sdk": "^1.16.75",
     "hono": "^4.10.6"
   },
   "devDependencies": {

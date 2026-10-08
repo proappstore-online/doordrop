@@ -1,9 +1,9 @@
-// Polling port of the Firestore-onSnapshot original. A campaign is "actively
-// tracking" if its latest track session has emitted a point in the last 30s.
-// We poll the worker every 30s per campaign. Move to fas.rooms `track:{id}`
-// in task #10 once the worker broadcasts on append.
+// Real-time tracking via fas.rooms. A campaign is "actively tracking" if its
+// latest track session has emitted a point in the last 30s. Falls back to polling
+// when rooms are unavailable or disconnected.
 
 import { useState, useEffect } from 'react';
+import { useApp } from '@proappstore/sdk';
 import { apiGet, ApiError } from '../lib/api';
 
 const ACTIVE_THRESHOLD_MS = 30_000;
@@ -46,6 +46,7 @@ async function hasRecentActivity(campaignId: string): Promise<boolean> {
 
 export function useActiveCampaignTracking(campaignIds: string[]) {
   const [activeCampaigns, setActiveCampaigns] = useState<Set<string>>(new Set());
+  const app = useApp() as any;
 
   useEffect(() => {
     if (campaignIds.length === 0) {
@@ -53,6 +54,9 @@ export function useActiveCampaignTracking(campaignIds: string[]) {
       return;
     }
     let cancelled = false;
+    const rooms: Map<string, any> = new Map();
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+    let anyRoomActive = false;
 
     const check = async () => {
       const results = await Promise.all(
@@ -62,14 +66,53 @@ export function useActiveCampaignTracking(campaignIds: string[]) {
       setActiveCampaigns(new Set(results.filter(([, active]) => active).map(([id]) => id)));
     };
 
+    // Try to set up rooms for real-time tracking updates
+    if (app?.rooms) {
+      for (const campaignId of campaignIds) {
+        const room = app.rooms.join(`campaign:${campaignId}:track`);
+        rooms.set(campaignId, room);
+
+        room.onEvent(() => {
+          void check();
+        });
+
+        room.onReconnect(() => {
+          void check();
+        });
+
+        room.onConnectionState((_connectionState: string) => {
+          const isActive = rooms.size > 0 && Array.from(rooms.values()).some((r: any) => r.state === 'open');
+          if (isActive !== anyRoomActive) {
+            anyRoomActive = isActive;
+            if (!isActive && !fallbackInterval) {
+              fallbackInterval = setInterval(() => void check(), POLL_INTERVAL_MS);
+            } else if (isActive && fallbackInterval) {
+              clearInterval(fallbackInterval);
+              fallbackInterval = null;
+            }
+          }
+        });
+      }
+      anyRoomActive = true;
+    } else {
+      // Rooms unavailable, use polling only
+      anyRoomActive = false;
+    }
+
     void check();
-    const interval = setInterval(() => void check(), POLL_INTERVAL_MS);
+    if (!anyRoomActive) {
+      fallbackInterval = setInterval(() => void check(), POLL_INTERVAL_MS);
+    }
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      for (const room of rooms.values()) {
+        room.close();
+      }
+      if (fallbackInterval) clearInterval(fallbackInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignIds.join(',')]);
+  }, [campaignIds.join(','), app]);
 
   return activeCampaigns;
 }

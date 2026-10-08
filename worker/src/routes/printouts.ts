@@ -7,9 +7,10 @@ import { newId, pickDefined } from '../lib.js';
 const router = new Hono<AppEnv>();
 
 async function getCampaignStatus(c: Ctx, campaignId: string): Promise<string | null> {
-  const campaigns = await rows(c, 'get_campaign', { id: campaignId });
+  const campaigns = await rows<{ status?: unknown }>(c, 'get_campaign', { id: campaignId });
   if (campaigns.length === 0) return null;
-  return campaigns[0]!.status;
+  const status = campaigns[0]!.status;
+  return typeof status === 'string' ? status : null;
 }
 
 router.get('/campaigns/:campaignId/printouts', async (c) => {

@@ -429,7 +429,9 @@ describe('the app worker module', () => {
       PAS: {
         actions: { call: (name: string, params: Record<string, unknown>) => pas.actions.call(name, params), batch: (calls: any) => pas.actions.batch(calls) },
         secrets: { get: async () => null },
+        connectors: { token: async () => null },
         storage: { put: async () => ({}), get: async () => null },
+        rooms: { publish: async () => ({ delivered: 0 }) },
         log: async () => true,
       },
     };

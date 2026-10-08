@@ -119,7 +119,9 @@ export function fakePas(db: DatabaseSync, userId: string): PasClient {
       },
     },
     secrets: { get: async () => null },
+    connectors: { token: async () => null },
     storage: { put: async () => { throw new Error('unused'); }, get: async () => null },
+    rooms: { publish: async () => ({ delivered: 0 }) },
     log: async () => true,
   };
 }

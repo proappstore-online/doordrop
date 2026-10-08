@@ -17,6 +17,7 @@ export const ChatRepository = {
   },
 
   // TODO(task #10): port to fas.rooms `chat:{campaignId}` for true real-time.
+  // Polling for now; rooms integration handled at page level via useApp() hook.
   subscribeToMessages(campaignId: string, callback: (notes: CampaignNote[]) => void): () => void {
     let active = true;
     let lastTs = 0;

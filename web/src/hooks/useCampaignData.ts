@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useApp } from '@proappstore/sdk';
 import { CampaignRepository } from '../repositories/campaignRepository';
 import { DoorRepository } from '../repositories/doorRepository';
 import { PrintoutRepository } from '../repositories/printoutRepository';
@@ -11,7 +12,7 @@ import type { PrintoutData } from '../models/printout';
 import type { UserData } from '../models/user';
 import type { WalkerInterest } from '../models/walkerInterest';
 
-const DOORS_POLL_MS = 5000;
+const DOORS_FALLBACK_POLL_MS = 30000;
 
 export interface UseCampaignDataReturn {
   campaign: (CampaignData & { id: string }) | null;
@@ -118,12 +119,15 @@ export function useCampaignData(campaignId: string | undefined, currentUserId: s
     void load();
   }, [campaignId, currentUserId]);
 
-  // Live-ish doors (polling — port to fas.rooms `doors:{campaignId}` later).
+  // Live doors via fas.rooms with fallback polling on disconnect.
+  const app = useApp() as any;
   useEffect(() => {
     if (!campaignId) return;
     let cancelled = false;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
 
     const fetchDoors = async () => {
+      if (cancelled) return;
       try {
         const updated = await DoorRepository.getDoorsByCampaign(campaignId);
         if (!cancelled) setDoors(updated);
@@ -132,13 +136,52 @@ export function useCampaignData(campaignId: string | undefined, currentUserId: s
       }
     };
 
-    void fetchDoors();
-    const interval = setInterval(() => void fetchDoors(), DOORS_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [campaignId]);
+    const room = app?.rooms?.join(`campaign:${campaignId}:doors`);
+
+    if (room) {
+      // Real-time updates via room events
+      const unsubscribe = room.onEvent(() => {
+        void fetchDoors();
+      });
+
+      // Refetch on reconnect (missed events during disconnect)
+      const unsubscribeReconnect = room.onReconnect(() => {
+        void fetchDoors();
+      });
+
+      // Fallback polling when disconnected
+      const unsubscribeState = room.onConnectionState((state: string) => {
+        if (state === 'closed' || state === 'error') {
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(() => void fetchDoors(), DOORS_FALLBACK_POLL_MS);
+          }
+        } else {
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        }
+      });
+
+      void fetchDoors(); // Initial load
+      return () => {
+        cancelled = true;
+        unsubscribe();
+        unsubscribeReconnect();
+        unsubscribeState();
+        room.close();
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    } else {
+      // Fallback to polling if rooms unavailable
+      void fetchDoors();
+      fallbackInterval = setInterval(() => void fetchDoors(), DOORS_FALLBACK_POLL_MS);
+      return () => {
+        cancelled = true;
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    }
+  }, [campaignId, app]);
 
   return {
     campaign,

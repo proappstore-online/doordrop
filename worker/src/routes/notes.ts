@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { campaignAccess, whoami } from '../auth.js';
-import { rows, run, type AppEnv, type Ctx } from '../pas.js';
+import { rows, run, publishRoom, type AppEnv, type Ctx } from '../pas.js';
 import { newId } from '../lib.js';
 
 const router = new Hono<AppEnv>();
@@ -38,12 +38,15 @@ router.post('/campaigns/:campaignId/notes', async (c) => {
   const id = newId();
   const ts = Date.now();
   await run(c, 'create_campaign_note', { id, campaign_id: campaignId, user_name: body.userName, text: body.text, created_at: ts });
+  void publishRoom(c, `campaign:${campaignId}:notes`, { action: 'refresh' });
   return c.json({ id, createdAt: ts }, 201);
 });
 
 router.put('/users/:userId/chat-read-state/:campaignId', async (c) => {
   await requireSelf(c);
+  const userId = c.req.param('userId');
   await run(c, 'set_chat_read_state', { campaign_id: c.req.param('campaignId') });
+  void publishRoom(c, `user:${userId}:read-state`, { action: 'refresh' });
   return c.json({ ok: true });
 });
 

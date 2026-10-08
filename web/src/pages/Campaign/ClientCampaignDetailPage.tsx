@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
+import { useApp } from "@proappstore/sdk";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { DoorRepository } from "../../repositories/doorRepository";
 import { useAuthContext } from "../../hooks/useAuthContext";
@@ -148,14 +149,16 @@ const ClientCampaignDetailPage: React.FC = () => {
     }
   }, [campaign]);
 
-  // Poll track sessions for this campaign (replaces Firestore onSnapshot).
-  // Aggregates points + stops from sessions started in the last 24h, matching
-  // the original behaviour. Move to fas.rooms `track:{campaignId}` later.
+  // Real-time track sessions via fas.rooms with fallback polling.
+  // Aggregates points + stops from sessions started in the last 24h.
+  const app = useApp() as any;
   useEffect(() => {
     if (!campaignId) return;
     let cancelled = false;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
 
     const fetchAggregated = async () => {
+      if (cancelled) return;
       try {
         const sessions = await apiGet<TrackSessionListRow[]>(
           `/v1/campaigns/${campaignId}/track-sessions`,
@@ -194,13 +197,41 @@ const ClientCampaignDetailPage: React.FC = () => {
       }
     };
 
-    void fetchAggregated();
-    const interval = setInterval(() => void fetchAggregated(), TRACK_SESSIONS_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [campaignId]);
+    const room = app?.rooms?.join(`campaign:${campaignId}:track`);
+    if (room) {
+      room.onEvent(() => {
+        void fetchAggregated();
+      });
+      room.onReconnect(() => {
+        void fetchAggregated();
+      });
+      room.onConnectionState((state: string) => {
+        if (state === 'closed' || state === 'error') {
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(() => void fetchAggregated(), TRACK_SESSIONS_POLL_MS);
+          }
+        } else {
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        }
+      });
+      void fetchAggregated();
+      return () => {
+        cancelled = true;
+        room.close();
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    } else {
+      void fetchAggregated();
+      fallbackInterval = setInterval(() => void fetchAggregated(), TRACK_SESSIONS_POLL_MS);
+      return () => {
+        cancelled = true;
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    }
+  }, [campaignId, app]);
 
   useEffect(() => {
     if (!campaignId) return;

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { campaignAccess, requireCampaignAdmin, requireCampaignParticipant, requireActiveCampaign } from '../auth.js';
-import { batch, rows, run, type AppEnv, type Row } from '../pas.js';
+import { batch, rows, run, publishRoom, type AppEnv, type Row } from '../pas.js';
 import { fromJson, newId, pickDefined } from '../lib.js';
 
 const router = new Hono<AppEnv>();
@@ -42,6 +42,7 @@ router.post('/campaigns/:campaignId/doors', async (c) => {
   }
   const params = doorParams(campaignId, body);
   await run(c, 'create_door', params);
+  void publishRoom(c, `campaign:${campaignId}:doors`, { action: 'refresh' });
   return c.json({ id: params.id }, 201);
 });
 
@@ -53,6 +54,7 @@ router.post('/campaigns/:campaignId/doors/bulk', async (c) => {
     throw new HTTPException(400, { message: 'doors must be a non-empty array' });
   }
   await batch(c, body.doors.map((d) => ({ name: 'create_door', params: doorParams(campaignId, d) })));
+  void publishRoom(c, `campaign:${campaignId}:doors`, { action: 'refresh' });
   return c.json({ ok: true, count: body.doors.length }, 201);
 });
 
@@ -91,6 +93,7 @@ router.patch('/campaigns/:campaignId/doors/:doorId', async (c) => {
     campaign_id: campaignId,
     patch: JSON.stringify(updates),
   });
+  void publishRoom(c, `campaign:${campaignId}:doors`, { action: 'refresh' });
   return c.json({ ok: true });
 });
 
@@ -98,6 +101,7 @@ router.delete('/campaigns/:campaignId/doors/:doorId', async (c) => {
   const campaignId = c.req.param('campaignId');
   await requireCampaignAdmin(c, campaignId);
   await run(c, 'delete_door', { id: c.req.param('doorId'), campaign_id: campaignId });
+  void publishRoom(c, `campaign:${campaignId}:doors`, { action: 'refresh' });
   return c.json({ ok: true });
 });
 

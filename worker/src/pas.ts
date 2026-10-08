@@ -62,3 +62,8 @@ export async function batch(c: Ctx, calls: { name: string; params: Params }[]): 
     await pasCall(() => c.env.pas.actions.batch(chunk));
   }
 }
+
+/** Publish an event to a room for real-time updates. */
+export function publishRoom(c: Ctx, roomId: string, data: unknown): Promise<{ delivered: number }> {
+  return pasCall(() => c.env.pas.rooms.publish(roomId, data));
+}

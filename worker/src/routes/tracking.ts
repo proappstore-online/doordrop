@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { campaignAccess, requireAssignedWalker, requireActiveCampaign } from '../auth.js';
-import { batch, first, rows, run, type AppEnv, type Ctx, type Params } from '../pas.js';
+import { batch, first, rows, run, publishRoom, type AppEnv, type Ctx, type Params } from '../pas.js';
 import { newId } from '../lib.js';
 
 const router = new Hono<AppEnv>();
@@ -25,6 +25,7 @@ router.post('/campaigns/:campaignId/track-sessions', async (c) => {
   await requireAssignedWalker(c, campaignId);
   const id = newId();
   await run(c, 'start_track_session', { id, campaign_id: campaignId });
+  void publishRoom(c, `campaign:${campaignId}:track`, { action: 'refresh' });
   return c.json({ id, started_at: Date.now() }, 201);
 });
 
@@ -69,6 +70,7 @@ router.post('/track-sessions/:id/append', async (c) => {
   }
   if (calls.length === 0) return c.json({ ok: true, points: 0, stops: 0 });
   await batch(c, calls);
+  void publishRoom(c, `campaign:${session.campaign_id}:track`, { action: 'refresh' });
   return c.json({ ok: true, points: points.length, stops: stops.length });
 });
 
@@ -84,6 +86,7 @@ router.patch('/track-sessions/:id', async (c) => {
     throw new HTTPException(400, { message: 'ended_at required' });
   }
   await run(c, 'end_track_session', { id: sessionId, ended_at: body.ended_at });
+  void publishRoom(c, `campaign:${session.campaign_id}:track`, { action: 'refresh' });
   return c.json({ ok: true });
 });
 
