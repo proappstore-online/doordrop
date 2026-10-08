@@ -1,19 +1,61 @@
 import { useAuthContext } from '../../hooks/useAuthContext';
 import { useUserData } from '../../hooks/useUserData';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import LoadingScreen from '../../components/LoadingScreen';
+import { resolveReturnTarget } from '../../utils/deepLinkUtils';
 
 export default function LoginPage() {
   const { currentUser, loading, signIn } = useAuthContext();
   const { userData, needsRoleSelection, loading: userLoading } = useUserData();
+  const location = useLocation();
+  const [dismissMessage, setDismissMessage] = useState(false);
 
   if (loading || (currentUser && userLoading)) return <LoadingScreen />;
 
   if (currentUser) {
     if (needsRoleSelection) return <Navigate to="/select-role" replace />;
-    if (userData?.role === 'walker') return <Navigate to="/walker" replace />;
-    if (userData?.role === 'admin') return <Navigate to="/admin" replace />;
-    return <Navigate to="/app" replace />;
+
+    // Get the return target from the 'from' location state set by PrivateRoute
+    const from = location.state?.from;
+    const { path: returnPath, wasRedirected, reason } = resolveReturnTarget(from, userData);
+    const showRoleMismatchMessage = wasRedirected && reason === 'role';
+
+    return (
+      <>
+        {showRoleMismatchMessage && !dismissMessage && (
+          <div className="fixed top-4 left-4 right-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-lg p-4 max-w-md mx-auto z-50">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-blue-600 dark:text-blue-200"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  That link is for a different role — taking you to your home screen.
+                </p>
+              </div>
+              <button
+                onClick={() => setDismissMessage(true)}
+                className="flex-shrink-0 text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+        <Navigate to={returnPath} replace />
+      </>
+    );
   }
 
   return (
