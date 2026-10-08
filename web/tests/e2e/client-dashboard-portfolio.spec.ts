@@ -401,4 +401,99 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     const focusedHref = await newCampaignButton.getAttribute('href');
     expect(focusedHref).toBe('/app/setup');
   });
+
+  test('shows walker status on active campaigns with assigned walker', async ({ page }) => {
+    const now = new Date();
+    const mockCampaigns = [
+      {
+        id: 'camp-walker-assigned',
+        name: 'Campaign with Walker',
+        status: 'assigned' as const,
+        suburb: 'sydney',
+        postcode: '2000',
+        admin_ids: ['gh:test-client-portfolio'],
+        plan_type: 'roster' as const,
+        created_at: now.getTime(),
+        active_printout_id: 'flyer-1',
+        assigned_walker_id: 'walker-john-123',
+      },
+    ];
+
+    await page.route('**/.pas/worker/v1/campaigns**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockCampaigns),
+      }),
+    );
+
+    await page.goto('/app');
+
+    // Check walker status is visible
+    await expect(page.getByText(/✓ Walker assigned/)).toBeVisible();
+  });
+
+  test('shows walker lookup status on ready campaigns without assigned walker', async ({ page }) => {
+    const now = new Date();
+    const mockCampaigns = [
+      {
+        id: 'camp-walker-needed',
+        name: 'Campaign Needing Walker',
+        status: 'ready' as const,
+        suburb: 'sydney',
+        postcode: '2000',
+        admin_ids: ['gh:test-client-portfolio'],
+        plan_type: 'roster' as const,
+        created_at: now.getTime(),
+        active_printout_id: 'flyer-1',
+        // assigned_walker_id intentionally omitted
+      },
+    ];
+
+    await page.route('**/.pas/worker/v1/campaigns**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockCampaigns),
+      }),
+    );
+
+    await page.goto('/app');
+
+    // Check walker lookup message is visible
+    await expect(page.getByText(/Looking for walker/)).toBeVisible();
+  });
+
+  test('does not show walker status on draft campaigns', async ({ page }) => {
+    const now = new Date();
+    const mockCampaigns = [
+      {
+        id: 'camp-draft-no-walker',
+        name: 'Draft Campaign',
+        status: 'draft' as const,
+        suburb: 'sydney',
+        postcode: '2000',
+        admin_ids: ['gh:test-client-portfolio'],
+        plan_type: 'roster' as const,
+        created_at: now.getTime(),
+        lat: -33.8688,
+        lng: 151.2093,
+        active_printout_id: 'flyer-1',
+      },
+    ];
+
+    await page.route('**/.pas/worker/v1/campaigns**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockCampaigns),
+      }),
+    );
+
+    await page.goto('/app');
+
+    // Walker status should NOT appear on draft campaigns
+    const walkerText = page.getByText(/Walker assigned|Looking for walker/);
+    await expect(walkerText).not.toBeVisible();
+  });
 });

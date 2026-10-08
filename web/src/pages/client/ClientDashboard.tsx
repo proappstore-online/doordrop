@@ -44,6 +44,7 @@ function CampaignCard({ campaign }: CampaignCardProps) {
   const detail = [campaign.streetName, location].filter(Boolean).join(" · ");
   const primaryFlag = getPrimaryAttentionFlag(campaign);
   const hasAttention = primaryFlag !== null;
+  const isActive = campaign.status === "assigned" || campaign.status === "ready";
 
   return (
     <article
@@ -75,6 +76,14 @@ function CampaignCard({ campaign }: CampaignCardProps) {
           {campaign.budget != null && <span>${campaign.budget.toLocaleString()} budget</span>}
           {campaign.dueDate && <span>Due {new Date(campaign.dueDate).toLocaleDateString()}</span>}
         </div>
+
+        {isActive && (
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
+            <span aria-label="Walker status">
+              {campaign.assignedWalkerId ? "✓ Walker assigned" : "Looking for walker"}
+            </span>
+          </div>
+        )}
 
         {hasAttention && (
           <div className="mt-3">
