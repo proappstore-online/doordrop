@@ -249,6 +249,22 @@ describe('app admin, self-only and owner-only rules', () => {
     expect(row('SELECT payment_mode FROM users WHERE id = ?', CLIENT_1).payment_mode).toBe('platform');
   });
 
+  it('any user can fetch any user profile', async () => {
+    const res = await req(CLIENT_2, 'GET', `/v1/users/${CLIENT_1}`);
+    expect(res.status).toBe(200);
+    // API returns snake_case keys (created_at, photo_url, etc), which frontend converts via fromWire()
+    expect(res.body).toMatchObject({ id: CLIENT_1, name: CLIENT_1, role: 'client' });
+    expect(res.body).toHaveProperty('created_at');
+
+    // Non-existent user returns 404
+    expect((await req(CLIENT_1, 'GET', '/v1/users/nope')).status).toBe(404);
+
+    // Action directly returns the raw row with all columns
+    const directResult = await direct(WALKER_1, 'get_user', { id: CLIENT_1 });
+    expect(directResult).toHaveProperty('rows');
+    expect(directResult.rows?.[0]).toMatchObject({ id: CLIENT_1, name: CLIENT_1 });
+  });
+
   it('walker stats, flyers and chat read state are self-only', async () => {
     expect((await req(WALKER_2, 'POST', `/v1/users/${WALKER_1}/walker-stats/increment`, { doorsDelivered: 3 })).status).toBe(403);
     expect((await req(WALKER_1, 'POST', `/v1/users/${WALKER_1}/walker-stats/increment`, { doorsDelivered: 3 })).body.profile).toEqual({ totalDoorsDelivered: 3 });

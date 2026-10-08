@@ -44,8 +44,18 @@ const UserProfileDetailsCard: React.FC<UserProfileDetailsCardProps> = ({
           setError("User profile not found.");
         }
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
         console.error("Error fetching user data:", err);
-        setError("Failed to fetch user profile data.");
+        // Provide more specific error messages for common failures
+        if (errorMessage.includes('401')) {
+          setError("Your session has expired. Please sign in again.");
+        } else if (errorMessage.includes('403')) {
+          setError("You don't have permission to view this profile.");
+        } else if (errorMessage.includes('404')) {
+          setError("User profile not found.");
+        } else {
+          setError("Failed to load user profile data. Please try again.");
+        }
       } finally {
         setLoading(false);
       }
