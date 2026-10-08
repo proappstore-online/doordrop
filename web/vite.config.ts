@@ -11,6 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         importScripts: ['/push-sw.js'],
+        // Platform routes (/.pas/auth/*, /.pas/worker/*) and the QA runner are served
+        // by the host worker — never answer their navigations with the app shell.
+        navigateFallbackDenylist: [/^\/\.pas\//, /^\/__qa(\/|$)/],
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2,wasm,json}'],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         runtimeCaching: [
