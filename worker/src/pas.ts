@@ -75,3 +75,7 @@ export async function publish(c: Ctx, roomId: string, event: Record<string, unkn
     console.warn('[doordrop-worker] room publish failed', roomId, e);
   }
 }
+
+// Legacy route callers use this name. Keep the same loss-tolerant semantics
+// while those consumers migrate to typed campaign events.
+export const publishRoom = publish;

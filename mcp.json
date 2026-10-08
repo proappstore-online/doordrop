@@ -26,7 +26,7 @@
       "name": "can_join_campaign_room",
       "description": "Whether the caller may join a campaign's real-time room",
       "operation": "query",
-      "sql": "SELECT 1 AS ok FROM campaigns c WHERE c.id = :key AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) a WHERE a.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users u WHERE u.id = :__user_id AND u.role = 'admin')) LIMIT 1",
+      "sql": "SELECT 1 AS ok FROM campaigns c WHERE :room = 'campaign:' || :key AND :key IN (c.id, c.id || char(58) || 'notes', c.id || char(58) || 'doors', c.id || char(58) || 'track') AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) a WHERE a.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users u WHERE u.id = :__user_id AND u.role = 'admin')) LIMIT 1",
       "params": {
         "room": {
           "type": "string"
