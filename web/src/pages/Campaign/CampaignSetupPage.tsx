@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { useCampaignDraft } from "../../hooks/useCampaignDraft";
@@ -23,6 +23,7 @@ const STEPS: Array<{ id: StepId; label: string }> = [
 
 const CampaignSetupPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuthContext();
   const { draft, isLoaded, saveDraft, clearDraft } = useCampaignDraft(currentUser?.id);
 
@@ -38,17 +39,29 @@ const CampaignSetupPage: React.FC = () => {
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore draft on mount
+  // Restore draft on mount, or initialize with flyerId from URL params if present
   useEffect(() => {
-    if (!isLoaded || !draft) return;
+    if (!isLoaded) return;
 
-    const stepIndex = Math.min(draft.currentStep - 1, STEPS.length - 1);
-    setCurrentStepIndex(stepIndex);
-    setCampaignData(draft.data);
-    if (draft.campaignId) {
-      setCampaignId(draft.campaignId);
+    if (draft) {
+      // Restore existing draft (takes priority over URL params)
+      const stepIndex = Math.min(draft.currentStep - 1, STEPS.length - 1);
+      setCurrentStepIndex(stepIndex);
+      setCampaignData(draft.data);
+      if (draft.campaignId) {
+        setCampaignId(draft.campaignId);
+      }
+    } else {
+      // No draft: check for flyerId in URL params from flyer library "Use" action
+      const flyerId = searchParams.get("flyerId");
+      if (flyerId) {
+        setCampaignData((prev) => ({
+          ...prev,
+          activePrintoutId: flyerId,
+        }));
+      }
     }
-  }, [isLoaded, draft]);
+  }, [isLoaded, draft, searchParams]);
 
   const currentStep = STEPS[currentStepIndex];
   const isFirstStep = currentStepIndex === 0;
