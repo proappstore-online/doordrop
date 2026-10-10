@@ -1,5 +1,15 @@
 import React, { useMemo } from 'react';
 import type { DoorData } from '../../models/door';
+import type { PrintoutData } from '../../models/printout';
+
+export type SessionException =
+  | 'gps_lost'
+  | 'out_of_range'
+  | 'sync_failed'
+  | 'no_junk_mail_skipped'
+  | 'unknown_eligibility'
+  | 'inaccessible'
+  | 'wrong_location';
 
 interface WalkerSessionInProgressProps {
   /** Next door to deliver to, or null if none nearby */
@@ -14,18 +24,24 @@ interface WalkerSessionInProgressProps {
   distanceWalked: number;
   /** Elapsed time in minutes */
   elapsedMinutes: number;
+  /** GPS accuracy in meters (for confidence display) */
+  gpsAccuracy?: number;
   /** Current exception state, if any */
-  exception?: 'gps_lost' | 'out_of_range' | 'sync_failed' | 'no_junk_mail_skipped' | 'unknown_eligibility';
+  exception?: SessionException;
   /** Exception message for display */
   exceptionMessage?: string;
   /** Whether currently syncing with server */
   syncing?: boolean;
+  /** Active printout/flyer being delivered */
+  activePrintout?: PrintoutData & { id: string };
   /** Callback when user marks door as delivered */
   onDoorDelivered: (doorId: string) => void;
   /** Callback to skip a door */
-  onSkipDoor: () => void;
+  onSkipDoor: (doorId: string, reason: string) => void;
   /** Callback to show full door details */
   onShowDoorDetails: (door: DoorData & { id: string }) => void;
+  /** Callback to report an issue with a door */
+  onReportDoor?: (doorId: string) => void;
 }
 
 /**
@@ -40,52 +56,82 @@ const WalkerSessionInProgress: React.FC<WalkerSessionInProgressProps> = ({
   totalDoors,
   distanceWalked,
   elapsedMinutes,
+  gpsAccuracy,
   exception,
   exceptionMessage,
   syncing = false,
+  activePrintout,
   onDoorDelivered,
   onSkipDoor,
   onShowDoorDetails,
+  onReportDoor,
 }) => {
   const deliveryPercent = Math.round((delivered / totalDoors) * 100);
   const avgPaceMin = elapsedMinutes > 0 ? (distanceWalked / elapsedMinutes) * 60 : 0;
+
+  const gpsConfidenceLevel = useMemo(() => {
+    if (!gpsAccuracy) return 'unknown';
+    if (gpsAccuracy < 10) return 'excellent';
+    if (gpsAccuracy < 25) return 'good';
+    if (gpsAccuracy < 50) return 'fair';
+    return 'poor';
+  }, [gpsAccuracy]);
 
   const exceptionUI = useMemo(() => {
     if (!exception) return null;
 
     const exceptionConfigs: Record<
       string,
-      { color: string; icon: string; title: string; defaultMsg: string }
+      { color: string; icon: string; title: string; defaultMsg: string; retryable: boolean }
     > = {
       gps_lost: {
         color: 'red',
         icon: '📍',
         title: 'GPS signal lost',
         defaultMsg: 'Waiting for location fix. Auto-delivery paused.',
+        retryable: true,
       },
       out_of_range: {
         color: 'amber',
         icon: '⚠️',
         title: 'Out of delivery range',
         defaultMsg: 'Walk closer to nearby doors to continue delivery.',
+        retryable: true,
       },
       sync_failed: {
         color: 'amber',
         icon: '🔄',
         title: 'Connection issue',
         defaultMsg: 'Reconnecting to server. Your deliveries are saved locally.',
+        retryable: true,
       },
       no_junk_mail_skipped: {
         color: 'blue',
         icon: 'ℹ️',
         title: 'No Junk Mail',
         defaultMsg: 'This address has requested no unsolicited mail.',
+        retryable: false,
       },
       unknown_eligibility: {
         color: 'blue',
         icon: 'ℹ️',
         title: 'Property type unknown',
         defaultMsg: 'Verify eligibility before delivering.',
+        retryable: false,
+      },
+      inaccessible: {
+        color: 'amber',
+        icon: '🔒',
+        title: 'Inaccessible address',
+        defaultMsg: 'Cannot access this location. Consider reporting.',
+        retryable: false,
+      },
+      wrong_location: {
+        color: 'amber',
+        icon: '📍',
+        title: 'Location mismatch',
+        defaultMsg: 'Address location seems incorrect. Please verify.',
+        retryable: false,
       },
     };
 
@@ -107,12 +153,17 @@ const WalkerSessionInProgress: React.FC<WalkerSessionInProgressProps> = ({
     return (
       <div className={`rounded-lg border ${bgColor} p-4`}>
         <div className="flex gap-3">
-          <span className="text-2xl">{config.icon}</span>
-          <div>
+          <span className="text-2xl flex-shrink-0">{config.icon}</span>
+          <div className="flex-1">
             <p className={`font-semibold ${textColor}`}>{config.title}</p>
             <p className={`mt-1 text-sm ${textColor}`}>
               {exceptionMessage || config.defaultMsg}
             </p>
+            {config.retryable && (
+              <p className={`mt-2 text-xs ${textColor} opacity-75`}>
+                Move to a different location or check your connection and retry.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -140,7 +191,43 @@ const WalkerSessionInProgress: React.FC<WalkerSessionInProgressProps> = ({
             </p>
           </div>
         </div>
+
+        {/* GPS Confidence indicator */}
+        {gpsAccuracy !== undefined && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-medium text-emerald-100">GPS:</span>
+            <div className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full ${
+                gpsConfidenceLevel === 'excellent' ? 'bg-white' :
+                gpsConfidenceLevel === 'good' ? 'bg-emerald-100' :
+                gpsConfidenceLevel === 'fair' ? 'bg-yellow-200' :
+                'bg-red-200'
+              }`} />
+              <span className="text-xs text-emerald-100">
+                {gpsConfidenceLevel === 'excellent' ? '±' + Math.round(gpsAccuracy) + 'm (excellent)' :
+                 gpsConfidenceLevel === 'good' ? '±' + Math.round(gpsAccuracy) + 'm (good)' :
+                 gpsConfidenceLevel === 'fair' ? '±' + Math.round(gpsAccuracy) + 'm (fair)' :
+                 '±' + Math.round(gpsAccuracy) + 'm (poor)'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Active flyer reference panel */}
+      {activePrintout && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/20 border-b border-emerald-200 dark:border-emerald-800 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📄</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase">Active Flyer</p>
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 truncate">
+                {activePrintout.name}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Exception state */}
       {exceptionUI && <div className="px-4 py-3">{exceptionUI}</div>}
@@ -246,14 +333,25 @@ const WalkerSessionInProgress: React.FC<WalkerSessionInProgressProps> = ({
           {nextDoor && (
             <>
               <button
-                onClick={onSkipDoor}
+                onClick={() => onSkipDoor(nextDoor.id, 'user-skip')}
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={`Skip ${nextDoor.address}`}
               >
                 Skip
               </button>
+              {onReportDoor && (
+                <button
+                  onClick={() => onReportDoor(nextDoor.id)}
+                  className="flex-1 rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/20"
+                  aria-label={`Report issue at ${nextDoor.address}`}
+                >
+                  Report
+                </button>
+              )}
               <button
                 onClick={() => onShowDoorDetails(nextDoor)}
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={`Details for ${nextDoor.address}`}
               >
                 Details
               </button>
