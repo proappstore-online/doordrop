@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { campaignAccess, requireCampaignAdmin, requireOwner, whoami } from '../auth.js';
-import { call, first, rows, run, type AppEnv } from '../pas.js';
+import { call, first, publish, rows, run, type AppEnv } from '../pas.js';
 import { newId } from '../lib.js';
 
 const router = new Hono<AppEnv>();
@@ -53,6 +53,14 @@ router.post('/interests', async (c) => {
   };
   // Nothing inserted: the UNIQUE (walker_id, campaign_id) constraint.
   if (!res.results?.[0]?.meta?.changes) throw new HTTPException(409, { message: 'already interested' });
+
+  // Publish notification.created event to each campaign admin's user room
+  if (campaign?.adminIds && Array.isArray(campaign.adminIds)) {
+    for (const adminId of campaign.adminIds) {
+      void publish(c, `user:${adminId}`, { type: 'notification.created', userId: adminId });
+    }
+  }
+
   return c.json({ id }, 201);
 });
 

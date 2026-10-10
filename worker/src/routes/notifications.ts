@@ -19,14 +19,18 @@ router.patch('/notifications/:id', async (c) => {
   await requireOwner(c, 'notification_owner', id, 'notification not found', 'owner only');
   const userId = (await whoami(c)).id;
   await run(c, 'set_notification_read', { id, read: body.read ? 1 : 0 });
-  void publishRoom(c, `user:${userId}:notifications`, { action: 'refresh' });
+  // Publish inbox.changed event (unread count changed) after the read state is persisted
+  void publishRoom(c, `user:${userId}`, { type: 'inbox.changed', userId });
   return c.json({ ok: true });
 });
 
 router.post('/notifications/mark-all-read', async (c) => {
   const userId = (await whoami(c)).id;
   const changed = await run(c, 'mark_all_notifications_read');
-  void publishRoom(c, `user:${userId}:notifications`, { action: 'refresh' });
+  // Publish inbox.changed event (all unread count is now 0) after the bulk update is persisted
+  if (changed) {
+    void publishRoom(c, `user:${userId}`, { type: 'inbox.changed', userId });
+  }
   return c.json({ ok: true, changed });
 });
 

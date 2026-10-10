@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireCampaignAdmin, requireCampaignParticipant, whoami } from '../auth.js';
-import { batch, first, rows, run, type AppEnv, type Params, type Row } from '../pas.js';
+import { batch, first, publish, rows, run, type AppEnv, type Params, type Row } from '../pas.js';
 import { fromJson, newId, pickDefined, toJson } from '../lib.js';
 
 const router = new Hono<AppEnv>();
@@ -188,6 +188,12 @@ router.patch('/campaigns/:id', async (c) => {
     calls.push({ name: 'notify_walker_assigned', params: { campaign_id: campaignId, walker_id: newWalkerId } });
   }
   await batch(c, calls);
+
+  // Publish notification.created event to assigned walker's user room
+  if (newWalkerId && newWalkerId !== current.assigned_walker_id) {
+    void publish(c, `user:${newWalkerId}`, { type: 'notification.created', userId: newWalkerId });
+  }
+
   return c.json({ ok: true });
 });
 

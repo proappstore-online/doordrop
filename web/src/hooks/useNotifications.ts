@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useApp } from "@proappstore/sdk";
 import { useAuthContext } from "./useAuthContext";
 import {
   NotificationRepository,
@@ -7,6 +8,7 @@ import {
 
 export const useNotifications = () => {
   const { currentUser } = useAuthContext();
+  const app = useApp() as any;
   const [notifications, setNotifications] = useState<NotificationWithId[]>([]);
 
   const refresh = useCallback(async () => {
@@ -23,14 +25,48 @@ export const useNotifications = () => {
       setNotifications([]);
       return;
     }
-    void refresh();
 
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void refresh();
+    let cancelled = false;
+
+    // Initial fetch: load durable notification state from D1
+    const loadInitial = async () => {
+      await refresh();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [currentUser?.id, refresh]);
+    void loadInitial();
+
+    // User room subscription for real-time notification invalidations
+    const room = app?.rooms?.join(`user:${currentUser.id}`);
+    if (room) {
+      // Listen to notification.created and inbox.changed events
+      const unsubscribeEvent = room.onEvent((event: any) => {
+        if (event.data?.type === 'notification.created' || event.data?.type === 'inbox.changed') {
+          if (!cancelled) void refresh();
+        }
+      });
+
+      // Refetch on reconnect (missed events during disconnect)
+      const unsubscribeReconnect = room.onReconnect(() => {
+        if (!cancelled) void refresh();
+      });
+
+      return () => {
+        cancelled = true;
+        unsubscribeEvent();
+        unsubscribeReconnect();
+        room.close();
+      };
+    } else {
+      // Fallback: refresh on visibility change only
+      const onVisible = () => {
+        if (document.visibilityState === 'visible' && !cancelled) void refresh();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        cancelled = true;
+        document.removeEventListener('visibilitychange', onVisible);
+      };
+    }
+  }, [currentUser?.id, refresh, app]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
