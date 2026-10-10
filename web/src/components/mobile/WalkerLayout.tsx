@@ -10,8 +10,8 @@ const WalkerLayout: React.FC = () => {
   const bottomNavItems: BottomNavItem[] = [
     {
       path: '/walker',
-      label: 'Jobs',
-      ariaLabel: 'Browse available jobs',
+      label: 'Campaigns',
+      ariaLabel: 'Browse campaigns and assigned work',
       icon: (
         <svg
           className="w-6 h-6"
@@ -25,7 +25,29 @@ const WalkerLayout: React.FC = () => {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+          />
+        </svg>
+      ),
+    },
+    {
+      path: '/walker/history',
+      label: 'History',
+      ariaLabel: 'View past deliveries and earnings',
+      icon: (
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          role="img"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
       ),
@@ -33,7 +55,7 @@ const WalkerLayout: React.FC = () => {
     {
       path: '/walker/messages',
       label: 'Messages',
-      ariaLabel: 'View messages',
+      ariaLabel: 'View messages from campaign admins',
       icon: (
         <svg
           className="w-6 h-6"
@@ -55,7 +77,7 @@ const WalkerLayout: React.FC = () => {
     {
       path: '/walker/profile',
       label: 'Profile',
-      ariaLabel: 'View profile',
+      ariaLabel: 'View your profile and settings',
       icon: (
         <svg
           className="w-6 h-6"
