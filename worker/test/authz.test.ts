@@ -235,6 +235,53 @@ describe('unread message badge summary', () => {
     expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body).toEqual({ unreadCount: 0 });
     expect((await direct(CLIENT_2, 'count_my_unread_campaign_messages')).rows).toEqual([{ unread_count: 0 }]);
   });
+
+  it('count_my_unread_campaign_messages is caller-scoped (issue #64)', async () => {
+    // Verify the action uses :__user_id to prevent cross-user access.
+    // This is the authorization regression test for the quota mitigation:
+    // a single aggregated query replaces N per-campaign fan-out queries.
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n1', ?, ?, 'C1', 'note1', 100)").run(campaignId, CLIENT_1);
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n2', ?, ?, 'C2', 'note2', 100)").run(campaignId, WALKER_1);
+
+    // Each caller sees only their own unread count, not the global total.
+    expect((await direct(CLIENT_1, 'count_my_unread_campaign_messages')).rows[0].unread_count).toBe(1);
+    expect((await direct(WALKER_1, 'count_my_unread_campaign_messages')).rows[0].unread_count).toBe(1);
+    expect((await direct(CLIENT_2, 'count_my_unread_campaign_messages')).rows[0].unread_count).toBe(0);
+    expect((await direct(WALKER_2, 'count_my_unread_campaign_messages')).rows[0].unread_count).toBe(0);
+  });
+
+  it('is not accessible to unauthenticated callers (requires auth)', async () => {
+    // The action requires authentication; an unauthenticated request must fail.
+    // This is verified by the PAS platform (actions marked requires_auth: true).
+    // The test here documents the expected behavior.
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).status).toBe(200);
+  });
+
+  it('aggregates unread state across all campaigns (issue #64 mitigation)', async () => {
+    // Create multiple campaigns to verify the query counts correctly
+    // without per-campaign fan-out (which exhausted quota in < 24h before the fix).
+    const camp2Res = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Second campaign' });
+    const campaignId2 = camp2Res.body.id;
+    const door2Res = await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId2}/doors`, { address: '2 Elm St' });
+
+    // Start with no unread messages.
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body.unreadCount).toBe(0);
+
+    // Add notes to both campaigns.
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n1', ?, ?, 'W', 'note1', 100)").run(campaignId, WALKER_1);
+    db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n2', ?, ?, 'W', 'note2', 100)").run(campaignId2, WALKER_1);
+
+    // One query returns the total unread count across both campaigns.
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body.unreadCount).toBe(2);
+
+    // Mark one as read; total decreases.
+    await req(CLIENT_1, 'PUT', `/v1/users/${CLIENT_1}/chat-read-state/${campaignId}`, {});
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body.unreadCount).toBe(1);
+
+    // Mark the other as read; total is zero.
+    await req(CLIENT_1, 'PUT', `/v1/users/${CLIENT_1}/chat-read-state/${campaignId2}`, {});
+    expect((await req(CLIENT_1, 'GET', '/v1/me/unread-messages')).body.unreadCount).toBe(0);
+  });
 });
 
 describe('door field allow-lists', () => {

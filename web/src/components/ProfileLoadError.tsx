@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAuthContext } from '../hooks/useAuthContext';
+import { ApiError } from '../lib/api';
 
 interface Props {
   error: Error;
@@ -9,6 +10,7 @@ interface Props {
 export default function ProfileLoadError({ error, onRetry }: Props) {
   const { signOut } = useAuthContext();
   const isTimeout = error.message.includes('timeout') || error.message.includes('Timeout');
+  const isQuotaExceeded = error instanceof ApiError && error.status === 429;
 
   const handleRetry = useCallback(async () => {
     await onRetry();
@@ -17,6 +19,16 @@ export default function ProfileLoadError({ error, onRetry }: Props) {
   const handleSignOut = useCallback(() => {
     void signOut();
   }, [signOut]);
+
+  const getErrorMessage = () => {
+    if (isQuotaExceeded) {
+      return 'The app has reached its usage limit. Please try again in a few moments.';
+    }
+    if (isTimeout) {
+      return 'The connection took too long. Please check your internet and try again.';
+    }
+    return 'An error occurred while loading your profile. Please try again.';
+  };
 
   return (
     <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -43,9 +55,7 @@ export default function ProfileLoadError({ error, onRetry }: Props) {
           </h1>
 
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {isTimeout
-              ? 'The connection took too long. Please check your internet and try again.'
-              : 'An error occurred while loading your profile. Please try again.'}
+            {getErrorMessage()}
           </p>
 
           <p className="text-sm text-gray-500 dark:text-gray-500 mb-6 break-words">
