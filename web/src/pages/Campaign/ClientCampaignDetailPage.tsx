@@ -197,10 +197,13 @@ const ClientCampaignDetailPage: React.FC = () => {
       }
     };
 
-    const room = app?.rooms?.join(`campaign:${campaignId}:track`);
+    const room = app?.rooms?.join(`campaign:${campaignId}`);
     if (room) {
-      room.onEvent(() => {
-        void fetchAggregated();
+      // Listen to tracking.changed events only
+      room.onEvent((event: any) => {
+        if (event.data?.type === 'tracking.changed' && event.data?.campaignId === campaignId) {
+          void fetchAggregated();
+        }
       });
       room.onReconnect(() => {
         void fetchAggregated();

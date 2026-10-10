@@ -119,7 +119,8 @@ export function useCampaignData(campaignId: string | undefined, currentUserId: s
     void load();
   }, [campaignId, currentUserId]);
 
-  // Live doors via fas.rooms with fallback polling on disconnect.
+  // Live doors via campaign room events with fallback polling on disconnect.
+  // Door updates come via door.changed events published to campaign:{id} room.
   const app = useApp() as any;
   useEffect(() => {
     if (!campaignId) return;
@@ -136,12 +137,14 @@ export function useCampaignData(campaignId: string | undefined, currentUserId: s
       }
     };
 
-    const room = app?.rooms?.join(`campaign:${campaignId}:doors`);
+    const room = app?.rooms?.join(`campaign:${campaignId}`);
 
     if (room) {
-      // Real-time updates via room events
-      const unsubscribe = room.onEvent(() => {
-        void fetchDoors();
+      // Listen to door.changed events only
+      const unsubscribe = room.onEvent((event: any) => {
+        if (event.data?.type === 'door.changed' && event.data?.campaignId === campaignId) {
+          void fetchDoors();
+        }
       });
 
       // Refetch on reconnect (missed events during disconnect)

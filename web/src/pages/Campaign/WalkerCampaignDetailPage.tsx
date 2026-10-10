@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useApp } from "@proappstore/sdk";
 import { pushWalkerInterested } from "../../services/pushNotifications";
 import { useParams, Link } from "react-router-dom";
 import { CampaignRepository } from "../../repositories/campaignRepository";
@@ -14,7 +15,7 @@ import { CampaignNoteRepository, type CampaignNote } from "../../repositories/ca
 import Notes from "../UserInfoPage/Dashboard/Notes";
 import CampaignSharedView from "./components/CampaignSharedView";
 
-const DOORS_POLL_MS = 5000;
+const DOORS_FALLBACK_POLL_MS = 30000;
 
 const WalkerCampaignDetailPage: React.FC = () => {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -63,10 +64,16 @@ const WalkerCampaignDetailPage: React.FC = () => {
     loadCampaignData();
   }, [campaignId, currentUser]);
 
+  // Live doors via campaign room events with fallback polling.
+  // Door updates come via door.changed events published to campaign:{id} room.
+  const app = useApp() as any;
   useEffect(() => {
     if (!campaignId) return;
     let cancelled = false;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+
     const fetchDoors = async () => {
+      if (cancelled) return;
       try {
         const updated = await DoorRepository.getDoorsByCampaign(campaignId);
         if (!cancelled) setDoors(updated);
@@ -74,15 +81,56 @@ const WalkerCampaignDetailPage: React.FC = () => {
         /* swallow */
       }
     };
-    void fetchDoors();
-    const interval = setInterval(() => void fetchDoors(), DOORS_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [campaignId]);
 
-  // TODO(task #10): Replace with fas.rooms
+    const room = app?.rooms?.join(`campaign:${campaignId}`);
+
+    if (room) {
+      // Listen to door.changed events only
+      const unsubscribe = room.onEvent((event: any) => {
+        if (event.data?.type === 'door.changed' && event.data?.campaignId === campaignId) {
+          void fetchDoors();
+        }
+      });
+
+      // Refetch on reconnect (missed events during disconnect)
+      const unsubscribeReconnect = room.onReconnect(() => {
+        void fetchDoors();
+      });
+
+      // Fallback polling when disconnected
+      const unsubscribeState = room.onConnectionState((state: string) => {
+        if (state === 'closed' || state === 'error') {
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(() => void fetchDoors(), DOORS_FALLBACK_POLL_MS);
+          }
+        } else {
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        }
+      });
+
+      void fetchDoors(); // Initial load
+      return () => {
+        cancelled = true;
+        unsubscribe();
+        unsubscribeReconnect();
+        unsubscribeState();
+        room.close();
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    } else {
+      // Fallback to polling if rooms unavailable
+      void fetchDoors();
+      fallbackInterval = setInterval(() => void fetchDoors(), DOORS_FALLBACK_POLL_MS);
+      return () => {
+        cancelled = true;
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    }
+  }, [campaignId, app]);
+
   useEffect(() => {
     if (!campaignId || !isAssignedWalker) return;
     const unsub = CampaignNoteRepository.subscribeToNotes(campaignId, setNotes);

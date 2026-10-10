@@ -66,14 +66,17 @@ export function useActiveCampaignTracking(campaignIds: string[]) {
       setActiveCampaigns(new Set(results.filter(([, active]) => active).map(([id]) => id)));
     };
 
-    // Try to set up rooms for real-time tracking updates
+    // Try to set up rooms for real-time tracking updates via tracking.changed events
     if (app?.rooms) {
       for (const campaignId of campaignIds) {
-        const room = app.rooms.join(`campaign:${campaignId}:track`);
+        const room = app.rooms.join(`campaign:${campaignId}`);
         rooms.set(campaignId, room);
 
-        room.onEvent(() => {
-          void check();
+        // Listen to tracking.changed events only
+        room.onEvent((event: any) => {
+          if (event.data?.type === 'tracking.changed' && event.data?.campaignId === campaignId) {
+            void check();
+          }
         });
 
         room.onReconnect(() => {

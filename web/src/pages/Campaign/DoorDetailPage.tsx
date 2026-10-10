@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useApp } from "@proappstore/sdk";
 import { useParams, Link, useLocation } from "react-router-dom";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import { DoorRepository } from "../../repositories/doorRepository";
@@ -40,11 +41,16 @@ const DoorDetailPage: React.FC = () => {
     ? `/walker/campaign/${campaignId}`
     : `/app/campaign/${campaignId}`;
 
-  // TODO(task #10): replace 5s polling with a fas.rooms subscription.
+  // Live door updates via campaign room events with fallback polling.
+  // Door updates come via door.changed events published to campaign:{id} room.
+  const app = useApp() as any;
   useEffect(() => {
     if (!campaignId || !doorId) return;
     let cancelled = false;
+    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+
     const load = async () => {
+      if (cancelled) return;
       try {
         const doors = await DoorRepository.getDoorsByCampaign(campaignId);
         if (!cancelled) setDoor(doors.find((d) => d.id === doorId) ?? null);
@@ -54,13 +60,55 @@ const DoorDetailPage: React.FC = () => {
         if (!cancelled) setLoading(false);
       }
     };
-    void load();
-    const timer = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [campaignId, doorId]);
+
+    const room = app?.rooms?.join(`campaign:${campaignId}`);
+
+    if (room) {
+      // Listen to door.changed events only
+      const unsubscribe = room.onEvent((event: any) => {
+        if (event.data?.type === 'door.changed' && event.data?.campaignId === campaignId) {
+          void load();
+        }
+      });
+
+      // Refetch on reconnect (missed events during disconnect)
+      const unsubscribeReconnect = room.onReconnect(() => {
+        void load();
+      });
+
+      // Fallback polling when disconnected
+      const unsubscribeState = room.onConnectionState((state: string) => {
+        if (state === 'closed' || state === 'error') {
+          if (!fallbackInterval) {
+            fallbackInterval = setInterval(() => void load(), 30000);
+          }
+        } else {
+          if (fallbackInterval) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = null;
+          }
+        }
+      });
+
+      void load(); // Initial load
+      return () => {
+        cancelled = true;
+        unsubscribe();
+        unsubscribeReconnect();
+        unsubscribeState();
+        room.close();
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    } else {
+      // Fallback to polling if rooms unavailable
+      void load();
+      fallbackInterval = setInterval(() => void load(), 30000);
+      return () => {
+        cancelled = true;
+        if (fallbackInterval) clearInterval(fallbackInterval);
+      };
+    }
+  }, [campaignId, doorId, app]);
 
   // Load printouts
   useEffect(() => {
