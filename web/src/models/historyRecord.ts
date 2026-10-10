@@ -1,8 +1,8 @@
 export type HistoryRecordStatus = 'completed' | 'failed';
 
 export type HistoryRecordData = {
-
   walkerId: string;
+  campaignId: string;
   date: Date;
   streetName: string;
   income: number;

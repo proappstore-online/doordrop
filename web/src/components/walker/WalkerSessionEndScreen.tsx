@@ -1,5 +1,14 @@
 import React, { useMemo } from 'react';
 
+export type SyncState = 'syncing' | 'synced' | 'partial' | 'failed';
+
+export interface ExceptionSummary {
+  skipped: number;
+  inaccessible: number;
+  noJunkMail: number;
+  wrongLocation: number;
+}
+
 interface WalkerSessionEndScreenProps {
   /** Number of doors successfully delivered */
   deliveredCount: number;
@@ -9,6 +18,12 @@ interface WalkerSessionEndScreenProps {
   totalDistance: number;
   /** Total duration in minutes */
   totalDuration: number;
+  /** Sync state of delivery data */
+  syncState?: SyncState;
+  /** Number of doors pending sync (for partial state) */
+  pendingSyncCount?: number;
+  /** Summary of exceptions encountered */
+  exceptionSummary?: ExceptionSummary;
   /** Reason session ended */
   endReason:
     | 'manual_stop'
@@ -20,6 +35,8 @@ interface WalkerSessionEndScreenProps {
   error?: string;
   /** Callback to resume delivery if possible */
   onResume?: () => void;
+  /** Callback to retry sync if failed */
+  onRetrySyncCall?: () => void;
   /** Callback to end session and return to campaigns list */
   onComplete: () => void;
   /** Whether can resume (connection available, etc) */
@@ -36,14 +53,22 @@ const WalkerSessionEndScreen: React.FC<WalkerSessionEndScreenProps> = ({
   totalDoors,
   totalDistance,
   totalDuration,
+  syncState = 'synced',
+  pendingSyncCount,
+  exceptionSummary,
   endReason,
   error,
   onResume,
+  onRetrySyncCall,
   onComplete,
   canResume = false,
 }) => {
   const successRate = Math.round((deliveredCount / totalDoors) * 100);
   const avgPace = totalDuration > 0 ? (totalDistance / totalDuration) * 60 : 0;
+
+  const totalExceptions = exceptionSummary ?
+    (exceptionSummary.skipped + exceptionSummary.inaccessible + exceptionSummary.noJunkMail + exceptionSummary.wrongLocation)
+    : 0;
 
   const endReasonConfig = useMemo(() => {
     const configs: Record<
@@ -132,6 +157,69 @@ const WalkerSessionEndScreen: React.FC<WalkerSessionEndScreenProps> = ({
           </div>
         )}
 
+        {/* Data sync status - prominent to prevent confusion */}
+        <div className={`rounded-lg border p-4 ${
+          syncState === 'synced'
+            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/20'
+            : syncState === 'syncing'
+            ? 'border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/20'
+            : syncState === 'partial'
+            ? 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/20'
+            : 'border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/20'
+        }`}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">{
+              syncState === 'synced' ? '✓' :
+              syncState === 'syncing' ? '⏳' :
+              syncState === 'partial' ? '⚠' :
+              '✗'
+            }</span>
+            <div className="flex-1">
+              <p className={`font-semibold ${
+                syncState === 'synced'
+                  ? 'text-emerald-900 dark:text-emerald-100'
+                  : syncState === 'syncing'
+                  ? 'text-blue-900 dark:text-blue-100'
+                  : syncState === 'partial'
+                  ? 'text-amber-900 dark:text-amber-100'
+                  : 'text-red-900 dark:text-red-100'
+              }`}>
+                {syncState === 'synced' && 'All deliveries synced'}
+                {syncState === 'syncing' && 'Syncing deliveries...'}
+                {syncState === 'partial' && `${pendingSyncCount || 0} doors pending sync`}
+                {syncState === 'failed' && 'Sync failed'}
+              </p>
+              <p className={`mt-1 text-sm ${
+                syncState === 'synced'
+                  ? 'text-emerald-800 dark:text-emerald-200'
+                  : syncState === 'syncing'
+                  ? 'text-blue-800 dark:text-blue-200'
+                  : syncState === 'partial'
+                  ? 'text-amber-800 dark:text-amber-200'
+                  : 'text-red-800 dark:text-red-200'
+              }`}>
+                {syncState === 'synced' && 'Your delivery data is safely stored on our servers.'}
+                {syncState === 'syncing' && 'Your deliveries are being uploaded. Please stay connected.'}
+                {syncState === 'partial' && 'Some deliveries are still syncing. They will be saved automatically when you reconnect.'}
+                {syncState === 'failed' && 'Your deliveries are saved locally. Tap retry to sync when connection returns.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Exception summary */}
+        {exceptionSummary && totalExceptions > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+            <p className="font-semibold text-gray-900 dark:text-gray-100">Exceptions encountered:</p>
+            <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              {exceptionSummary.skipped > 0 && <li>• Skipped: {exceptionSummary.skipped}</li>}
+              {exceptionSummary.inaccessible > 0 && <li>• Inaccessible: {exceptionSummary.inaccessible}</li>}
+              {exceptionSummary.noJunkMail > 0 && <li>• No Junk Mail: {exceptionSummary.noJunkMail}</li>}
+              {exceptionSummary.wrongLocation > 0 && <li>• Wrong Location: {exceptionSummary.wrongLocation}</li>}
+            </ul>
+          </div>
+        )}
+
         {/* Delivery summary */}
         <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
           <div className="flex items-center justify-between">
@@ -193,10 +281,20 @@ const WalkerSessionEndScreen: React.FC<WalkerSessionEndScreenProps> = ({
       {/* Footer actions */}
       <div className="border-t border-gray-200 bg-gray-50 px-4 py-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-col gap-2">
+          {syncState === 'failed' && onRetrySyncCall && (
+            <button
+              onClick={onRetrySyncCall}
+              className="w-full rounded-lg bg-amber-600 px-4 py-3 font-medium text-white transition hover:bg-amber-700"
+              aria-label="Retry syncing deliveries"
+            >
+              Retry Sync
+            </button>
+          )}
           {onResume && canResume && (
             <button
               onClick={onResume}
               className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition hover:bg-emerald-700"
+              aria-label="Resume delivery"
             >
               Resume Delivery
             </button>
@@ -204,6 +302,7 @@ const WalkerSessionEndScreen: React.FC<WalkerSessionEndScreenProps> = ({
           <button
             onClick={onComplete}
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            aria-label="Done and go to campaigns"
           >
             Done
           </button>
