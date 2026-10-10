@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CampaignData } from '../../models/campaign';
 import StatusChip from './StatusChip';
+import ConfirmationDialog from './ConfirmationDialog';
+import InterestStateIndicator from './InterestStateIndicator';
 
 interface CampaignCardProps {
   campaign: CampaignData & { id: string };
@@ -22,7 +24,11 @@ const CampaignCard: React.FC<CampaignCardProps> = ({
   isLoading,
   className = '',
 }) => {
+  const [showInterestConfirm, setShowInterestConfirm] = useState(false);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+
   const isAvailable = campaign.status === 'ready' || campaign.status === 'assigned';
+  const isClosed = campaign.status === 'complete' || campaign.status === 'review' || campaign.status === 'payment' || campaign.status === 'archive';
 
   return (
     <article
@@ -54,15 +60,25 @@ const CampaignCard: React.FC<CampaignCardProps> = ({
           />
         </div>
 
-        {/* Interest status */}
-        {isInterested && (
+        {/* Interest state with guidance */}
+        {isClosed && (
           <div className="mb-3">
-            <StatusChip label="Pending" variant="pending" size="sm" />
+            <InterestStateIndicator state="closed" showGuidance={false} />
           </div>
         )}
-        {isAssigned && (
+        {!isClosed && isAssigned && (
           <div className="mb-3">
-            <StatusChip label="Assigned" variant="assigned" size="sm" />
+            <InterestStateIndicator state="assigned" showGuidance={false} />
+          </div>
+        )}
+        {!isClosed && isInterested && !isAssigned && (
+          <div className="mb-3">
+            <InterestStateIndicator state="interest-submitted" showGuidance={false} />
+          </div>
+        )}
+        {!isClosed && !isInterested && !isAssigned && isAvailable && (
+          <div className="mb-3">
+            <InterestStateIndicator state="available" showGuidance={false} />
           </div>
         )}
 
@@ -122,10 +138,10 @@ const CampaignCard: React.FC<CampaignCardProps> = ({
             Details
           </Link>
 
-          {!isAssigned && isAvailable && (
+          {!isAssigned && isAvailable && !isClosed && (
             <button
               onClick={() =>
-                isInterested ? onWithdrawInterest?.() : onExpressInterest?.()
+                isInterested ? setShowWithdrawConfirm(true) : setShowInterestConfirm(true)
               }
               disabled={isLoading}
               className={`flex-1 h-11 px-3 py-2.5 text-sm font-medium rounded transition-colors flex items-center justify-center ${
@@ -151,6 +167,34 @@ const CampaignCard: React.FC<CampaignCardProps> = ({
             </button>
           )}
         </div>
+
+        {/* Confirmations */}
+        <ConfirmationDialog
+          isOpen={showInterestConfirm}
+          title="Express Interest?"
+          message={`Let the campaign admin know you're interested in "${campaign.name}". They'll review and assign if you're a good fit.`}
+          confirmLabel="Express Interest"
+          onConfirm={() => {
+            setShowInterestConfirm(false);
+            onExpressInterest?.();
+          }}
+          onCancel={() => setShowInterestConfirm(false)}
+          isLoading={isLoading}
+        />
+
+        <ConfirmationDialog
+          isOpen={showWithdrawConfirm}
+          title="Withdraw Interest?"
+          message={`You can express interest again later if you change your mind.`}
+          confirmLabel="Withdraw"
+          confirmVariant="warning"
+          onConfirm={() => {
+            setShowWithdrawConfirm(false);
+            onWithdrawInterest?.();
+          }}
+          onCancel={() => setShowWithdrawConfirm(false)}
+          isLoading={isLoading}
+        />
       </div>
     </article>
   );

@@ -94,7 +94,10 @@ const WalkerCampaignsPage: React.FC = () => {
       }
     } catch (err) {
       console.error("Failed to express interest:", err);
+      // Preserve the intent: only clear submitting state, don't clear the campaign from UI
       setError("Failed to express interest. Please try again.");
+      // Re-check the actual state from server to avoid false state
+      void loadCampaigns();
     } finally {
       setSubmittingInterest(null);
     }
@@ -106,12 +109,23 @@ const WalkerCampaignsPage: React.FC = () => {
       await WalkerInterestRepository.withdrawInterest(interestId);
       setCampaigns((prev) =>
         prev.map((c) =>
-          c.interest?.id === interestId ? { ...c, interest: undefined } : c
+          c.interest?.id === interestId
+            ? {
+                ...c,
+                interest: {
+                  ...c.interest,
+                  status: "withdrawn",
+                }
+              }
+            : c
         )
       );
     } catch (err) {
       console.error("Failed to withdraw interest:", err);
+      // Preserve the intent: only clear submitting state
       setError("Failed to withdraw interest. Please try again.");
+      // Re-check the actual state from server to avoid false state
+      void loadCampaigns();
     } finally {
       setSubmittingInterest(null);
     }
