@@ -8,7 +8,8 @@ import type { CampaignData } from "../../models/campaign";
 import type { WalkerInterest } from "../../models/walkerInterest";
 import { useActiveCampaignTracking } from "../../hooks/useActiveCampaignTracking";
 import LiveTrackingIndicator from "../../components/LiveTrackingIndicator";
-import { campaignStatusColors } from "../../utils/campaignStatusColors";
+import MobilePageHeader from "../../components/mobile/MobilePageHeader";
+import StatusChip from "../../components/mobile/StatusChip";
 
 type Tab = "available" | "assigned" | "past";
 
@@ -169,40 +170,35 @@ const WalkerCampaignsPage: React.FC = () => {
   const currentContent = tabContent[activeTab];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6">
-          <div className="mb-4">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              Job Discovery
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Browse available campaigns and manage your deliveries
-            </p>
-          </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
+      <MobilePageHeader
+        title="Job Discovery"
+        subtitle="Browse available campaigns and manage your deliveries"
+        showBackButton={false}
+      />
 
-          <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === tab.id
-                    ? "border-emerald-600 text-emerald-600"
-                    : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300"
-                }`}
-              >
-                {tab.label}
-                <span className="ml-2 text-xs bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5">
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </div>
+      <div className="sticky top-[73px] z-10 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-1 overflow-x-auto px-4 sm:px-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap min-h-[44px] flex items-center gap-2 ${
+                activeTab === tab.id
+                  ? "border-emerald-600 text-emerald-600"
+                  : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300"
+              }`}
+            >
+              {tab.label}
+              <span className="text-xs bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5">
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6">
+      <div className="px-4 py-6 sm:px-6">
         {error && (
           <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <div className="flex items-start justify-between">
@@ -268,23 +264,26 @@ const WalkerCampaignsPage: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex flex-col gap-2 items-end">
-                          <span
-                            className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                              campaignStatusColors[campaign.status] ||
-                              campaignStatusColors.draft
-                            }`}
-                          >
-                            {campaign.status}
-                          </span>
+                          <StatusChip
+                            label={campaign.status}
+                            variant={(
+                              {
+                                draft: 'neutral',
+                                ready: 'info',
+                                assigned: 'active',
+                                complete: 'success',
+                                review: 'info',
+                                payment: 'info',
+                                archive: 'neutral',
+                              } as const
+                            )[campaign.status] || 'neutral'}
+                            size="sm"
+                          />
                           {isInterested && (
-                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-                              Pending
-                            </span>
+                            <StatusChip label="Pending" variant="pending" size="sm" />
                           )}
                           {isAssigned && (
-                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-                              Assigned
-                            </span>
+                            <StatusChip label="Assigned" variant="assigned" size="sm" />
                           )}
                         </div>
                       </div>
@@ -340,7 +339,7 @@ const WalkerCampaignsPage: React.FC = () => {
                       <div className="flex gap-3">
                         <Link
                           to={`/walker/campaign/${campaign.id}`}
-                          className="flex-1 text-center px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-600 dark:border-emerald-400 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                          className="flex-1 h-12 flex items-center justify-center px-4 text-sm font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-600 dark:border-emerald-400 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                         >
                           View
                         </Link>
@@ -353,7 +352,7 @@ const WalkerCampaignsPage: React.FC = () => {
                                 : handleExpressInterest(campaign.id)
                             }
                             disabled={isSubmitting}
-                            className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            className={`flex-1 h-12 px-4 text-sm font-medium rounded-lg transition-colors flex items-center justify-center ${
                               isInterested
                                 ? "border border-amber-600 dark:border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
                                 : "bg-emerald-600 text-white hover:bg-emerald-700"
@@ -370,7 +369,7 @@ const WalkerCampaignsPage: React.FC = () => {
                         {isAssigned && activeTab !== "assigned" && (
                           <button
                             disabled
-                            className="flex-1 px-4 py-2 text-sm font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 rounded-lg cursor-default"
+                            className="flex-1 h-12 px-4 text-sm font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 rounded-lg cursor-default flex items-center justify-center"
                           >
                             Assigned to you
                           </button>
@@ -378,8 +377,8 @@ const WalkerCampaignsPage: React.FC = () => {
 
                         {activeTab === "assigned" && (
                           <Link
-                            to={`/walker/delivery/${campaign.id}`}
-                            className="flex-1 text-center px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                            to={`/walker/campaign/${campaign.id}/deliver`}
+                            className="flex-1 h-12 flex items-center justify-center px-4 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                           >
                             Start Delivery
                           </Link>

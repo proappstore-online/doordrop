@@ -3,6 +3,7 @@ import LoginPage from './pages/auth/LoginPage';
 import RoleSelectionPage from './pages/auth/RoleSelectionPage';
 import ErrorPage from './pages/error/ErrorPage';
 import MainLayout from './components/layout/MainLayout';
+import WalkerLayout from './components/mobile/WalkerLayout';
 import PrivateRoute from './routes/PrivateRoute';
 import ClientOnboardingGuard from './routes/ClientOnboardingGuard';
 import ClientDashboard from './pages/client/ClientDashboard';
@@ -87,9 +88,12 @@ const router = createBrowserRouter([
     element: <PrivateRoute allowedRoles={['walker']} />,
     children: [
       {
-        element: <MainLayout />,
+        element: <WalkerLayout />,
         children: [
           { path: '/walker', element: <WalkerCampaignsPage /> },
+          { path: '/walker/profile', element: <UserProfilePage /> },
+          { path: '/walker/messages', element: <MessagesPage /> },
+          { path: '/walker/messages/:campaignId', element: <MessagesPage /> },
           { path: '/walker/dashboard', element: <WalkerDashboardPage /> },
           { path: '/walker/setup', element: <WalkerSetupPage /> },
           { path: '/walker/history', element: <WalkerHistoryPage /> },
@@ -102,8 +106,6 @@ const router = createBrowserRouter([
           { path: '/walker/user/:userId/edit', element: <UserProfileEditPage /> },
           { path: '/walker/account', element: <AccountSettingsPage /> },
           { path: '/walker/preferences', element: <UserPreferencesPage /> },
-          { path: '/walker/messages', element: <MessagesPage /> },
-          { path: '/walker/messages/:campaignId', element: <MessagesPage /> },
         ],
       },
     ],
