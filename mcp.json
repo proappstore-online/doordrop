@@ -1077,7 +1077,7 @@
       "name": "list_campaign_notes",
       "description": "A campaign's notes (campaign admin or assigned walker), oldest first, optionally after a time",
       "operation": "query",
-      "sql": "SELECT * FROM campaign_notes WHERE campaign_id = :campaign_id AND (:since IS NULL OR created_at > :since) AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id)) ORDER BY created_at ASC LIMIT 500",
+      "sql": "SELECT * FROM campaign_notes WHERE campaign_id = :campaign_id AND (:since IS NULL OR created_at > :since) AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) ORDER BY created_at ASC LIMIT 500",
       "params": {
         "campaign_id": {
           "type": "string"
@@ -1093,7 +1093,7 @@
       "name": "create_campaign_note",
       "description": "Post a note on a campaign (campaign admin or assigned walker)",
       "operation": "execute",
-      "sql": "INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) SELECT :id, :campaign_id, :__user_id, :user_name, :text, :created_at WHERE length(:text) BETWEEN 1 AND 5000 AND length(:user_name) BETWEEN 1 AND 200 AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id))",
+      "sql": "INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) SELECT :id, :campaign_id, :__user_id, :user_name, :text, :created_at WHERE length(:text) BETWEEN 1 AND 5000 AND length(:user_name) BETWEEN 1 AND 200 AND (EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = :campaign_id AND aj.value = :__user_id) OR EXISTS (SELECT 1 FROM campaigns cw WHERE cw.id = :campaign_id AND cw.assigned_walker_id = :__user_id) OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin'))",
       "params": {
         "id": {
           "type": "string"

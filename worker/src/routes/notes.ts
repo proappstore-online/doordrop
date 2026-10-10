@@ -7,10 +7,10 @@ import { publishCampaignEvent } from '../realtime.js';
 
 const router = new Hono<AppEnv>();
 
-// Campaign admin OR the assigned walker.
+// Campaign admin OR the assigned walker OR platform admin.
 async function requireNotesAccess(c: Ctx, campaignId: string): Promise<void> {
   const access = await campaignAccess(c, campaignId);
-  if (!access || !(access.is_admin || access.is_walker)) {
+  if (!access || !(access.is_admin || access.is_walker || access.is_platform_admin)) {
     throw new HTTPException(403, { message: 'campaign-admin or assigned-walker only' });
   }
 }

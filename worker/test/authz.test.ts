@@ -136,6 +136,61 @@ describe('campaign room events', () => {
   });
 });
 
+describe('campaign notes authorization', () => {
+  it('only campaign admin and assigned walker can post notes', async () => {
+    const noteBody = { text: 'Hello', userName: 'Tester' };
+    expect((await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/notes`, noteBody)).status).toBe(201);
+    expect((await req(WALKER_1, 'POST', `/v1/campaigns/${campaignId}/notes`, noteBody)).status).toBe(201);
+    expect((await req(WALKER_2, 'POST', `/v1/campaigns/${campaignId}/notes`, noteBody)).status).toBe(403);
+    expect((await req(CLIENT_2, 'POST', `/v1/campaigns/${campaignId}/notes`, noteBody)).status).toBe(403);
+    expect((await req(ADMIN, 'POST', `/v1/campaigns/${campaignId}/notes`, noteBody)).status).toBe(201);
+    expect(row('SELECT COUNT(*) AS n FROM campaign_notes').n).toBe(3);
+  });
+
+  it('only campaign admin and assigned walker can read notes', async () => {
+    await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/notes`, { text: 'Secret', userName: 'C1' });
+    expect((await req(CLIENT_1, 'GET', `/v1/campaigns/${campaignId}/notes`)).body).toHaveLength(1);
+    expect((await req(WALKER_1, 'GET', `/v1/campaigns/${campaignId}/notes`)).body).toHaveLength(1);
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns/${campaignId}/notes`)).status).toBe(403);
+    expect((await req(CLIENT_2, 'GET', `/v1/campaigns/${campaignId}/notes`)).status).toBe(403);
+    expect((await req(ADMIN, 'GET', `/v1/campaigns/${campaignId}/notes`)).body).toHaveLength(1);
+  });
+
+  it('straight at the actions', async () => {
+    expect((await direct(CLIENT_1, 'create_campaign_note', {
+      id: 'n1',
+      campaign_id: campaignId,
+      user_name: 'C1',
+      text: 'Direct note',
+      created_at: 1000,
+    })).meta.changes).toBe(1);
+    expect((await direct(WALKER_1, 'create_campaign_note', {
+      id: 'n2',
+      campaign_id: campaignId,
+      user_name: 'W1',
+      text: 'Walker note',
+      created_at: 2000,
+    })).meta.changes).toBe(1);
+    expect((await direct(WALKER_2, 'create_campaign_note', {
+      id: 'n3',
+      campaign_id: campaignId,
+      user_name: 'W2',
+      text: 'Not allowed',
+      created_at: 3000,
+    })).meta.changes).toBe(0);
+    expect((await direct(CLIENT_2, 'create_campaign_note', {
+      id: 'n4',
+      campaign_id: campaignId,
+      user_name: 'C2',
+      text: 'Not allowed',
+      created_at: 4000,
+    })).meta.changes).toBe(0);
+    expect((await direct(ADMIN, 'list_campaign_notes', { campaign_id: campaignId })).rows).toHaveLength(2);
+    expect((await direct(CLIENT_1, 'list_campaign_notes', { campaign_id: campaignId })).rows).toHaveLength(2);
+    expect((await direct(WALKER_2, 'list_campaign_notes', { campaign_id: campaignId })).rows).toHaveLength(0);
+  });
+});
+
 describe('a client cannot edit another client\'s campaign', () => {
   it('through the worker', async () => {
     expect((await req(CLIENT_2, 'PATCH', `/v1/campaigns/${campaignId}`, { name: 'mine now' })).status).toBe(403);

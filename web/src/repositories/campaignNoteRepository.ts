@@ -14,6 +14,8 @@ export interface CampaignNote {
 type CampaignRoomEvent = {
   type?: string;
   campaignId?: string;
+  noteId?: string;
+  createdAt?: number;
 };
 
 /**
@@ -61,7 +63,7 @@ function subscribeToCampaignNotes(
 
   const room = pas.rooms.join(`campaign:${campaignId}`);
   const unsubscribeEvent = room.onEvent<CampaignRoomEvent>((event: RoomEvent<CampaignRoomEvent>) => {
-    if (event.data.type !== 'notes.changed' || event.data.campaignId !== campaignId) return;
+    if (event.data.type !== 'note.created' || event.data.campaignId !== campaignId) return;
     // A sequence gap means an event was missed. In either case, refetch the
     // durable D1 history rather than trusting the event payload itself.
     const missedEvent = lastEventSequence !== null && event.seq !== lastEventSequence + 1;
