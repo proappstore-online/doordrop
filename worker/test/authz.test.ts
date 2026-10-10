@@ -76,7 +76,7 @@ describe('campaign room authorization', () => {
 });
 
 describe('campaign room events', () => {
-  it('publishes a note invalidation only after the note write succeeds', async () => {
+  it('publishes note.created invalidation only after the note write succeeds', async () => {
     const pas = fakePas(db, CLIENT_1);
     const publish = vi.fn(async () => ({ delivered: 1 }));
     pas.rooms.publish = publish;
@@ -92,7 +92,46 @@ describe('campaign room events', () => {
     expect(res.status).toBe(201);
     expect(publish).toHaveBeenCalledWith(
       `campaign:${campaignId}`,
-      { type: 'notes.changed', campaignId, noteId: body.id, createdAt: body.createdAt },
+      { type: 'note.created', campaignId, noteId: body.id, createdAt: body.createdAt },
+    );
+  });
+
+  it('publishes door.changed invalidation only after the door write succeeds', async () => {
+    const pas = fakePas(db, CLIENT_1);
+    const publish = vi.fn(async () => ({ delivered: 1 }));
+    pas.rooms.publish = publish;
+    const res = await app.fetch(
+      new Request(`https://doordrop.proappstore.online/v1/campaigns/${campaignId}/doors`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ address: '1 Test St' }),
+      }),
+      { pas },
+    );
+    const body = await res.json() as { id: string };
+    expect(res.status).toBe(201);
+    expect(publish).toHaveBeenCalledWith(
+      `campaign:${campaignId}`,
+      expect.objectContaining({ type: 'door.changed', campaignId, doorId: body.id }),
+    );
+  });
+
+  it('publishes tracking.changed invalidation only after the tracking write succeeds', async () => {
+    const pas = fakePas(db, WALKER_1);
+    const publish = vi.fn(async () => ({ delivered: 1 }));
+    pas.rooms.publish = publish;
+    const res = await app.fetch(
+      new Request(`https://doordrop.proappstore.online/v1/campaigns/${campaignId}/track-sessions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+      { pas },
+    );
+    const body = await res.json() as { id: string };
+    expect(res.status).toBe(201);
+    expect(publish).toHaveBeenCalledWith(
+      `campaign:${campaignId}`,
+      expect.objectContaining({ type: 'tracking.changed', campaignId, sessionId: body.id }),
     );
   });
 });

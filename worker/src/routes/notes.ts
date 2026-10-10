@@ -39,7 +39,7 @@ router.post('/campaigns/:campaignId/notes', async (c) => {
   const id = newId();
   const ts = Date.now();
   await run(c, 'create_campaign_note', { id, campaign_id: campaignId, user_name: body.userName, text: body.text, created_at: ts });
-  await publishCampaignEvent(c, { type: 'notes.changed', campaignId, noteId: id, createdAt: ts });
+  await publishCampaignEvent(c, { type: 'note.created', campaignId, noteId: id, createdAt: ts });
   return c.json({ id, createdAt: ts }, 201);
 });
 
