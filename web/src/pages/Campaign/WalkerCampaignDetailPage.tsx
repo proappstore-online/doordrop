@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useApp } from "@proappstore/sdk";
 import { pushWalkerInterested } from "../../services/pushNotifications";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { DoorRepository } from "../../repositories/doorRepository";
 import { PrintoutRepository } from "../../repositories/printoutRepository";
@@ -14,12 +14,16 @@ import type { WalkerInterest } from "../../models/walkerInterest";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
 import Notes from "../UserInfoPage/Dashboard/Notes";
 import CampaignSharedView from "./components/CampaignSharedView";
+import MobilePageHeader from "../../components/mobile/MobilePageHeader";
+import StickyActionBar from "../../components/mobile/StickyActionBar";
+import StatusChip from "../../components/mobile/StatusChip";
 
 const DOORS_FALLBACK_POLL_MS = 30000;
 
 const WalkerCampaignDetailPage: React.FC = () => {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { currentUser } = useAuthContext();
+  const navigate = useNavigate();
   const [campaign, setCampaign] = useState<(CampaignData & { id: string }) | null>(null);
   const [doors, setDoors] = useState<(DoorData & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,16 +228,67 @@ const WalkerCampaignDetailPage: React.FC = () => {
   const isPending = interestStatus === "pending";
   const isAssigned = interestStatus === "assigned";
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-600 dark:text-gray-400">Loading campaign details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            Campaign not found
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            This campaign may have been removed or you don't have access to it.
+          </p>
+          <button
+            onClick={() => navigate('/walker')}
+            className="inline-block h-11 px-6 text-sm font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-600 dark:border-emerald-400 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+          >
+            Back to Jobs
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
+      <MobilePageHeader
+        title={campaign.name}
+        subtitle={`${campaign.suburb} ${campaign.postcode}`}
+        onBack={() => navigate(-1)}
+        showBackButton={true}
+        actions={
+          <StatusChip
+            label={campaign.status}
+            variant={
+              campaign.status === 'complete' ? 'success'
+              : campaign.status === 'ready' ? 'info'
+              : 'neutral'
+            }
+            size="sm"
+          />
+        }
+      />
+
       {/* Error banner */}
       {error && (
-        <div className="sticky top-0 z-20 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-4">
-          <div className="max-w-4xl mx-auto flex items-start justify-between gap-4">
+        <div className="mx-4 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-start justify-between gap-4">
             <p className="text-sm font-medium text-red-800 dark:text-red-200">{error}</p>
             <button
               onClick={() => setError(null)}
               className="text-red-600 dark:text-red-400 hover:text-red-700 flex-shrink-0"
+              aria-label="Dismiss error"
             >
               ✕
             </button>
@@ -241,40 +296,9 @@ const WalkerCampaignDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile hero header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6">
-          <div className="flex items-start justify-between gap-4 mb-3">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
-                {campaign.name}
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {campaign.suburb} {campaign.postcode}
-              </p>
-            </div>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex-shrink-0">
-              {campaign.status}
-            </span>
-          </div>
-
-          {/* Interest status badge */}
-          {isPending && (
-            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
-              ⏳ Pending
-            </div>
-          )}
-          {isAssigned && (
-            <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-              ✓ Assigned to you
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 space-y-6">
+      <div className="px-4 py-6 sm:px-6 space-y-6">
         {/* Key stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-2 gap-3 bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
           {campaign.totalDoors != null && (
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium mb-1">Doors</p>
@@ -401,33 +425,32 @@ const WalkerCampaignDetailPage: React.FC = () => {
           )}
         </div>
 
-        {/* Interest CTA */}
-        {!isAssignedWalker && !isCampaignClosed && (
-          <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-            <button
-              onClick={() => (isPending ? handleWithdrawInterest() : handleExpressInterest())}
-              disabled={submittingInterest}
-              className={`w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                isPending
-                  ? "border border-amber-600 dark:border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {submittingInterest ? "..." : isPending ? "Withdraw Interest" : "Express Interest"}
-            </button>
-          </div>
-        )}
-
-        {/* Start delivery CTA for assigned walkers */}
-        {isAssignedWalker && !isCampaignClosed && (
-          <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-            <Link
-              to={`/walker/campaign/${campaignId}/deliver`}
-              className="block text-center px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Start Delivery
-            </Link>
-          </div>
+        {/* Interest CTA - Mobile sticky action bar */}
+        {!isCampaignClosed && (
+          <StickyActionBar
+            actions={
+              isAssignedWalker
+                ? [
+                    {
+                      label: 'Start Delivery',
+                      onClick: () => navigate(`/walker/campaign/${campaignId}/deliver`),
+                      variant: 'primary',
+                    },
+                  ]
+                : [
+                    {
+                      label: isPending ? 'Withdraw' : 'Express Interest',
+                      onClick: () =>
+                        isPending ? handleWithdrawInterest() : handleExpressInterest(),
+                      variant: isPending ? 'secondary' : 'primary',
+                      loading: submittingInterest,
+                      ariaLabel: isPending
+                        ? `Withdraw interest in ${campaign.name}`
+                        : `Express interest in ${campaign.name}`,
+                    },
+                  ]
+            }
+          />
         )}
 
         {/* Notes section for assigned walkers */}
@@ -441,6 +464,20 @@ const WalkerCampaignDetailPage: React.FC = () => {
               onAddNote={handleAddNote}
               formatDate={(date) => new Date(date).toLocaleString()}
             />
+          </div>
+        )}
+
+        {/* Interest status indicator */}
+        {isPending && (
+          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+            <span>⏳</span>
+            <span>Your interest is pending approval</span>
+          </div>
+        )}
+        {isAssigned && (
+          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg">
+            <span>✓</span>
+            <span>You're assigned to this campaign</span>
           </div>
         )}
 

@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { pushWalkerInterested } from "../../services/pushNotifications";
-import { Link } from "react-router-dom";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { WalkerInterestRepository } from "../../repositories/walkerInterestRepository";
 import type { CampaignData } from "../../models/campaign";
 import type { WalkerInterest } from "../../models/walkerInterest";
-import { useActiveCampaignTracking } from "../../hooks/useActiveCampaignTracking";
-import LiveTrackingIndicator from "../../components/LiveTrackingIndicator";
 import MobilePageHeader from "../../components/mobile/MobilePageHeader";
-import StatusChip from "../../components/mobile/StatusChip";
+import CampaignCard from "../../components/mobile/CampaignCard";
 
 type Tab = "available" | "assigned" | "past";
 
@@ -26,8 +23,6 @@ const WalkerCampaignsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [submittingInterest, setSubmittingInterest] = useState<string | null>(null);
 
-  const campaignIds = useMemo(() => campaigns.map((c) => c.id), [campaigns]);
-  const activeCampaigns = useActiveCampaignTracking(campaignIds);
 
   const loadCampaigns = async () => {
     if (!currentUser) return;
@@ -173,16 +168,23 @@ const WalkerCampaignsPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
       <MobilePageHeader
         title="Job Discovery"
-        subtitle="Browse available campaigns and manage your deliveries"
+        subtitle="Find work that matches your availability"
         showBackButton={false}
       />
 
-      <div className="sticky top-[73px] z-10 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div
+        className="sticky top-[73px] z-10 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700"
+        role="tablist"
+        aria-label="Campaign tabs"
+      >
         <div className="flex gap-1 overflow-x-auto px-4 sm:px-6">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-label={`${tab.label} campaigns (${tab.count})`}
               className={`px-3 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap min-h-[44px] flex items-center gap-2 ${
                 activeTab === tab.id
                   ? "border-emerald-600 text-emerald-600"
@@ -198,7 +200,7 @@ const WalkerCampaignsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-4 py-6 sm:px-6">
+      <div className="px-4 py-6 sm:px-6" role="tabpanel" aria-live="polite">
         {error && (
           <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
             <div className="flex items-start justify-between">
@@ -215,9 +217,21 @@ const WalkerCampaignsPage: React.FC = () => {
           </div>
         )}
 
-        {currentContent.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">Loading campaigns...</p>
+            </div>
+          </div>
+        ) : currentContent.length === 0 ? (
+          <div className="text-center py-12 px-4">
+            <div className="mb-4 text-4xl">
+              {activeTab === "available" && "📋"}
+              {activeTab === "assigned" && "✓"}
+              {activeTab === "past" && "📜"}
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
               {activeTab === "available" &&
                 "No campaigns available at the moment. Check back soon!"}
               {activeTab === "assigned" && "You haven't been assigned to any campaigns yet."}
@@ -226,7 +240,8 @@ const WalkerCampaignsPage: React.FC = () => {
             {activeTab === "available" && (
               <button
                 onClick={loadCampaigns}
-                className="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                className="inline-block h-11 px-6 text-sm font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-600 dark:border-emerald-400 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                aria-label="Refresh available campaigns"
               >
                 Refresh
               </button>
@@ -235,158 +250,22 @@ const WalkerCampaignsPage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             {currentContent.map((campaign) => {
-              const isLive = activeCampaigns.has(campaign.id);
               const isInterested = campaign.interest?.status === "pending";
               const isAssigned = campaign.interest?.status === "assigned";
-              const isWithdrawn = campaign.interest?.status === "withdrawn";
               const isSubmitting =
                 submittingInterest === campaign.id ||
                 submittingInterest === campaign.interest?.id;
 
               return (
-                <div
+                <CampaignCard
                   key={campaign.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
-                >
-                  <div className="p-4 sm:p-6">
-                    <div className="grid grid-cols-1 gap-4">
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                              {campaign.name}
-                            </h3>
-                            {isLive && <LiveTrackingIndicator size="sm" showLabel={false} />}
-                          </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {campaign.suburb} {campaign.postcode}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-2 items-end">
-                          <StatusChip
-                            label={campaign.status}
-                            variant={(
-                              {
-                                draft: 'neutral',
-                                ready: 'info',
-                                assigned: 'active',
-                                complete: 'success',
-                                review: 'info',
-                                payment: 'info',
-                                archive: 'neutral',
-                              } as const
-                            )[campaign.status] || 'neutral'}
-                            size="sm"
-                          />
-                          {isInterested && (
-                            <StatusChip label="Pending" variant="pending" size="sm" />
-                          )}
-                          {isAssigned && (
-                            <StatusChip label="Assigned" variant="assigned" size="sm" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Key stats grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-t border-b border-gray-200 dark:border-gray-700">
-                        {campaign.totalDoors != null && (
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium mb-1">
-                              Doors
-                            </p>
-                            <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              {campaign.totalDoors}
-                            </p>
-                          </div>
-                        )}
-                        {campaign.budget != null && (
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium mb-1">
-                              Pay
-                            </p>
-                            <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              ${campaign.budget}
-                            </p>
-                          </div>
-                        )}
-                        {campaign.dueDate && (
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium mb-1">
-                              Due
-                            </p>
-                            <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              {new Date(campaign.dueDate).toLocaleDateString(
-                                undefined,
-                                { month: "short", day: "numeric" }
-                              )}
-                            </p>
-                          </div>
-                        )}
-                        {campaign.activePrintoutId && (
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium mb-1">
-                              Flyer
-                            </p>
-                            <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
-                              ✓
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-3">
-                        <Link
-                          to={`/walker/campaign/${campaign.id}`}
-                          className="flex-1 h-12 flex items-center justify-center px-4 text-sm font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-600 dark:border-emerald-400 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-                        >
-                          View
-                        </Link>
-
-                        {activeTab === "available" && !isAssigned && !isWithdrawn && (
-                          <button
-                            onClick={() =>
-                              isInterested
-                                ? handleWithdrawInterest(campaign.interest!.id)
-                                : handleExpressInterest(campaign.id)
-                            }
-                            disabled={isSubmitting}
-                            className={`flex-1 h-12 px-4 text-sm font-medium rounded-lg transition-colors flex items-center justify-center ${
-                              isInterested
-                                ? "border border-amber-600 dark:border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                                : "bg-emerald-600 text-white hover:bg-emerald-700"
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            {isSubmitting
-                              ? "..."
-                              : isInterested
-                                ? "Withdraw"
-                                : "Express Interest"}
-                          </button>
-                        )}
-
-                        {isAssigned && activeTab !== "assigned" && (
-                          <button
-                            disabled
-                            className="flex-1 h-12 px-4 text-sm font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 rounded-lg cursor-default flex items-center justify-center"
-                          >
-                            Assigned to you
-                          </button>
-                        )}
-
-                        {activeTab === "assigned" && (
-                          <Link
-                            to={`/walker/campaign/${campaign.id}/deliver`}
-                            className="flex-1 h-12 flex items-center justify-center px-4 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                          >
-                            Start Delivery
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  campaign={campaign}
+                  isInterested={isInterested && activeTab === "available"}
+                  isAssigned={isAssigned}
+                  onExpressInterest={() => handleExpressInterest(campaign.id)}
+                  onWithdrawInterest={() => handleWithdrawInterest(campaign.interest!.id)}
+                  isLoading={isSubmitting}
+                />
               );
             })}
           </div>
