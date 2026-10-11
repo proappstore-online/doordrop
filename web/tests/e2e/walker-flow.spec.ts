@@ -20,7 +20,7 @@ test.describe('Walker happy path (mocked)', () => {
     await setupWalkerAuth(page, context);
 
     // Then register additional endpoint mocks
-    await page.route(/\/\.pas\/worker\/v1\/campaigns(\?|$)/, (route) =>
+    await page.route('**/.pas/worker/v1/campaigns*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
