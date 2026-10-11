@@ -57,16 +57,32 @@ test.describe('Route gating (profile load errors)', () => {
     await expect(page.getByRole('button', { name: /Sign Out/i })).toBeVisible();
   });
 
-  test('walker role route shows profile error on /v1/me timeout', async ({ page }) => {
+  test('walker role route shows profile error on /v1/me network abort', async ({ page }) => {
     await page.route('**/v1/me', (route) => {
       route.abort('timedout');
     });
     await page.goto('/walker');
 
     await expect(page.getByText(/Could Not Load Profile/i)).toBeVisible();
-    // When route.abort('timedout') is used, Playwright creates error message "net::ERR_ABORTED"
-    // which doesn't match the timeout check, so component displays the generic error message
+    // route.abort('timedout') creates error "net::ERR_ABORTED" which doesn't match timeout detection
+    // ProfileLoadError shows the generic error message for this network condition
     await expect(page.getByText(/An error occurred while loading your profile/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Try Again/i })).toBeVisible();
+  });
+
+  test('walker role route shows profile error on /v1/me timeout', async ({ page }) => {
+    await page.route('**/v1/me', (route) =>
+      route.fulfill({
+        status: 408,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'timeout', message: 'Request timeout' }),
+      }),
+    );
+    await page.goto('/walker');
+
+    await expect(page.getByText(/Could Not Load Profile/i)).toBeVisible();
+    // 408 status creates ApiError with message containing "timeout", triggering isTimeout in ProfileLoadError
+    await expect(page.getByText(/The connection took too long/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Try Again/i })).toBeVisible();
   });
 

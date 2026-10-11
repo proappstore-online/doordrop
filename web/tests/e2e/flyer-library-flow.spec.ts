@@ -162,15 +162,18 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - verify empty library state with actual control inspection
-    // Should see flyer library section but with no flyer items rendered
+    // Step 3: Flyer - verify empty library state and draft persistence
     await expect(page.locator('legend').filter({ hasText: 'Flyer selection' })).toBeVisible();
 
-    // Verify no flyer selection controls are present (empty state)
-    const flyerButtons = page.locator('button').filter({ hasText: /Select from library|Add a flyer/i });
-    // If buttons exist, they should be disabled or show empty state
-    const emptyStateText = page.getByText(/no flyer|empty|library|nothing available/i);
-    await expect(emptyStateText.or(flyerButtons)).toBeVisible({ timeout: 5000 });
+    // Click "Select from library" to trigger library load (proves library was empty)
+    await page.click('button:has-text("Select from library")');
+    await page.waitForSelector('h3:has-text("Select from your library")', { timeout: 5000 });
+
+    // Assert exact empty library text
+    await expect(page.getByText('No flyers in your library. Upload one first.')).toBeVisible();
+
+    // Assert zero library-flyer checkboxes (no flyers to select)
+    await expect(page.locator('input[name="library-flyer"]')).toHaveCount(0);
 
     // Continue button on Flyer step should be DISABLED (no activePrintoutId)
     const continueBtn = page.locator('button:has-text("Continue →")').first();
@@ -180,6 +183,27 @@ test.describe('Flyer library unification (Issue #21)', () => {
     expect(campaignPostCount).toBe(1);
     // Verify no printout mutations were attempted (no POST/PATCH/DELETE to printouts)
     expect(printoutMutationCount).toBe(0);
+
+    // Verify localStorage draft - stored as campaign_draft_<userId>
+    const draftJson = await page.evaluate(() => {
+      return localStorage.getItem('campaign_draft_gh:test-client-1');
+    });
+    expect(draftJson).toBeTruthy();
+    const draft = JSON.parse(draftJson!);
+    expect(draft.currentStep).toBe(3); // Flyer step (after Location=2, Delivery=2)
+    expect(draft.campaignId).toBe(campaignId);
+    expect(draft.data.activePrintoutId).toBeUndefined(); // No flyer selected
+
+    // Reload and verify draft is restored at Flyer step
+    await page.reload();
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
+
+    // After reload, Continue button should still be disabled
+    const reloadedContinueBtn = page.locator('button:has-text("Continue →")').first();
+    await expect(reloadedContinueBtn).toBeDisabled({ timeout: 5000 });
+
+    // Verify campaign was NOT created again (count still 1)
+    expect(campaignPostCount).toBe(1);
 
     // STOP HERE - do not navigate to Schedule/Budget or publish
     // This proves the wizard contract: flyer is required to advance beyond the Flyer step
