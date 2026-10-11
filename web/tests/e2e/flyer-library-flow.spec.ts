@@ -446,7 +446,9 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.goto('/app/campaign/campaign-empty-state');
 
     // Verify empty state messaging is visible
-    await expect(page.getByText('No flyer selected — Walkers won\'t see anything to deliver.')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('Upload a flyer or select one from your library to get started.')).toBeVisible();
+    // The page shows both a warning banner and empty state; target the blue empty state specifically
+    const blueAlert = page.locator('.bg-blue-50, .dark\\:bg-blue-900').filter({ has: page.getByText('No flyer selected') });
+    await expect(blueAlert).toBeVisible({ timeout: 5_000 });
+    await expect(blueAlert.getByText(/Upload a flyer or select one/)).toBeVisible();
   });
 });

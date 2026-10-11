@@ -217,7 +217,6 @@ const CampaignMapLeaflet: React.FC<CampaignMapProps> = ({
   return (
     <div className={className ?? "w-full h-[400px] rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600"}>
       <MapContainer
-        key={`${center.lat},${center.lng}`}
         center={[center.lat, center.lng]}
         zoom={zoom}
         className="w-full h-full"
