@@ -7,6 +7,70 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     // Set up walker authentication (session cookie + mocked endpoints)
     await setupWalkerAuth(page, context);
+
+    // Mock campaign detail endpoint
+    await page.route('**/campaigns/test-campaign-id', (route) => {
+      if (route.request().method() === 'GET' && !route.request().url().includes('/doors') && !route.request().url().includes('/printouts')) {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'test-campaign-id',
+            name: 'Test Campaign',
+            status: 'ready',
+            suburb: 'sydney',
+            postcode: '2000',
+            admin_ids: ['admin-1'],
+            assigned_walker_id: null,
+            doors: 150,
+            pay: 25.5,
+            due_date: new Date().toISOString(),
+            radius_meters: 50,
+            created_at: Date.now(),
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    // Mock campaign doors endpoint
+    await page.route('**/campaigns/test-campaign-id/doors**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'door-1',
+            campaign_id: 'test-campaign-id',
+            lat: -33.8688,
+            lng: 151.2093,
+            status: 'pending',
+            delivered_by: null,
+            notes: null,
+            created_at: Date.now(),
+          },
+        ]),
+      }),
+    );
+
+    // Mock printouts endpoint
+    await page.route('**/campaigns/test-campaign-id/printouts**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    );
+
+    // Mock interests endpoint
+    await page.route('**/interests**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    );
   });
 
   test("renders campaign hero with name and location", async ({ page }) => {

@@ -22,6 +22,48 @@ test.describe('Walker Core Journeys', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     // Set up walker authentication (session cookie + mocked endpoints)
     await setupWalkerAuth(page, context);
+
+    // Mock campaigns endpoint
+    await page.route('**/.pas/worker/v1/campaigns**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-1',
+            name: 'Test Campaign 1',
+            status: 'ready',
+            suburb: 'sydney',
+            postcode: '2000',
+            admin_ids: ['admin-1'],
+            assigned_walker_id: null,
+            doors: 150,
+            pay: 25.5,
+            due_date: new Date().toISOString(),
+            radius_meters: 50,
+            created_at: Date.now(),
+          },
+        ]),
+      }),
+    );
+
+    // Mock interests endpoint
+    await page.route('**/.pas/worker/v1/interests**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    );
+
+    // Mock history endpoint
+    await page.route('**/.pas/worker/v1/history**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    );
   });
 
   // ============================================================================

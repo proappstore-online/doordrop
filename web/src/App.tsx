@@ -91,6 +91,7 @@ const router = createBrowserRouter([
         element: <WalkerLayout />,
         children: [
           { path: '/walker', element: <WalkerCampaignsPage /> },
+          { path: '/walker/campaigns', element: <WalkerCampaignsPage /> },
           { path: '/walker/profile', element: <UserProfilePage /> },
           { path: '/walker/messages', element: <MessagesPage /> },
           { path: '/walker/messages/:campaignId', element: <MessagesPage /> },
