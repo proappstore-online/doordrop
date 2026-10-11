@@ -4,7 +4,12 @@ import { test, expect } from '@playwright/test';
 // Uses mocked SDK init probe for deterministic test without external flakes.
 test.describe('Route gating (unauthenticated)', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock SDK init probe to return immediately (no auth)
+    // Mock SDK auth probe to return unauthenticated (no session)
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({ status: 401, body: '{"error":"not signed in"}' }),
+    );
+
+    // Mock FAS auth endpoints
     await page.route('**/api.freeappstore.online/**', (route) => {
       if (route.request().url().includes('user') || route.request().url().includes('me')) {
         return route.fulfill({ status: 401, body: '{"error":"not signed in"}' });
@@ -17,7 +22,9 @@ test.describe('Route gating (unauthenticated)', () => {
     test(`${path} redirects to /login when unauthenticated`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(/\/(login|\/?)$/);
-      await expect(page.getByRole('button', { name: /sign in with github/i })).toBeVisible();
+      // Verify login button with actual SDK text
+      const loginBtn = page.locator('button').filter({ hasText: /continue with github/i }).first();
+      await expect(loginBtn).toBeVisible();
     });
   }
 });
@@ -113,7 +120,20 @@ test.describe('Route gating (profile load errors)', () => {
 // Role selection routing: new accounts see the form, existing accounts are redirected away
 test.describe('Role selection routing', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Set __Host cookie with valid format (no domain attribute, use url instead)
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'test-user',
+          login: 'test-user',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
+    // Fallback: also set __Host cookie for legacy SDK paths
     try {
       await context.addCookies([
         {
@@ -124,7 +144,6 @@ test.describe('Role selection routing', () => {
         },
       ]);
     } catch {
-      // Fallback for edge cases
       await page.addInitScript(() => {
         document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
       });
@@ -276,8 +295,20 @@ test.describe('Role selection routing', () => {
 // Deep link restoration: unauthenticated → protected URL → login → restored to original URL
 test.describe('Deep link restoration after sign-in', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Mock authentication to succeed after sign-in
-    // Set __Host cookie with valid format (no domain attribute)
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'test-user',
+          login: 'test-user',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
+    // Fallback: set __Host cookie
     try {
       await context.addCookies([
         {
@@ -505,23 +536,19 @@ test.describe('Deep link restoration after sign-in', () => {
 
 // Delivery tracking fault injection: verify session lifecycle and error recovery
 test.describe('Delivery tracking fault tolerance', () => {
-  test.beforeEach(async ({ page, context }) => {
-    // Mock authentication for walker
-    // Set __Host cookie with valid format (no domain attribute)
-    try {
-      await context.addCookies([
-        {
-          name: '__Host-pas-session',
-          value: 'mock-session-token',
-          url: 'http://localhost:5173/',
-          httpOnly: true,
-        },
-      ]);
-    } catch {
-      await page.addInitScript(() => {
-        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
-      });
-    }
+  test.beforeEach(async ({ page }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'walker-user',
+          login: 'test-walker',
+          avatarUrl: null,
+        }),
+      }),
+    );
   });
 
   test('session creation failure blocks tracking start (prevent orphan sessions)', async ({
@@ -729,22 +756,19 @@ test.describe('Delivery tracking fault tolerance', () => {
 
 // Campaign assignment lifecycle: atomic status transitions and explicit field clearing
 test.describe('Campaign assignment lifecycle', () => {
-  test.beforeEach(async ({ page, context }) => {
-    // Set __Host cookie with valid format (no domain attribute)
-    try {
-      await context.addCookies([
-        {
-          name: '__Host-pas-session',
-          value: 'mock-session-token',
-          url: 'http://localhost:5173/',
-          httpOnly: true,
-        },
-      ]);
-    } catch {
-      await page.addInitScript(() => {
-        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
-      });
-    }
+  test.beforeEach(async ({ page }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'test-user',
+          login: 'test-user',
+          avatarUrl: null,
+        }),
+      }),
+    );
   });
 
   test('assign walker: sets status to assigned and updates assignedWalkerId', async ({ page }) => {

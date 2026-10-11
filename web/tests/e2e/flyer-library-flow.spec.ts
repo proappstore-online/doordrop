@@ -66,23 +66,12 @@ test.describe('Flyer library unification (Issue #21)', () => {
   });
 
   test('Create campaign without flyers shows no prompt and navigates directly', async ({ page }) => {
-    const mockFlyer = [
-      {
-        id: 'flyer-no-prompt',
-        name: 'No Prompt Flyer',
-        description: 'Flyer for no-prompt test',
-        file_url: 'https://example.com/no-prompt.png',
-        archived_at: null,
-        created_at: 1_700_000_000_000,
-      },
-    ];
-
-    // Mock flyer list with one flyer
-    await page.route('**/users/*/flyers', (route) =>
+    // Mock flyer endpoint with EMPTY flyer list (no flyers available)
+    await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockFlyer),
+        body: JSON.stringify([]),  // Empty - no flyers to select
       }),
     );
 
@@ -132,31 +121,14 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    // Mock printouts
-    await page.route('**/printouts', async (route) => {
-      const method = route.request().method();
-      if (method === 'POST') {
-        return route.fulfill({
-          status: 201,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            id: 'printout-no-prompt',
-            campaign_id: 'campaign-no-flyers',
-            version: 1,
-            name: 'No Prompt Flyer',
-            description: 'Flyer for no-prompt test',
-            file_url: 'https://example.com/no-prompt.png',
-            flyer_id: 'flyer-no-prompt',
-            created_at: 1_700_000_000_000,
-          }),
-        });
-      }
-      return route.fulfill({
+    // Mock printouts endpoint (empty, no printout created when skipping flyer)
+    await page.route('**/printouts', (route) =>
+      route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([]),
-      });
-    });
+      }),
+    );
 
     await page.goto('/app/setup');
 
@@ -179,14 +151,13 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - select the available flyer
-    await page.click('button:has-text("Select from library")');
-    await page.waitForSelector('label:has-text("No Prompt Flyer")', { timeout: 5000 });
-    await page.click('label:has-text("No Prompt Flyer")');
-    await page.click('button:has-text("Confirm")');
+    // Step 3: Flyer - no flyers available, should show empty state with skip option
+    // With empty flyer list, the step should show "no flyers" message and skip button
+    const skipBtn = page.locator('button').filter({ hasText: /skip|continue|without/i }).first();
+    await skipBtn.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Continue to Schedule & Budget
-    await page.click('button:has-text("Continue →")');
+    // Continue without selecting (skip flyer selection)
+    await skipBtn.click();
     await page.waitForSelector('label[for="start-date"]', { timeout: 5000 });
 
     // Step 4: Schedule & Budget
