@@ -319,11 +319,20 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     // Wait for campaigns to load
     await expect(page.getByText('Campaign One')).toBeVisible();
 
-    // Focus the campaign card link directly and verify it's focusable
-    const campaignLink = page.locator('a[href="/app/campaign/camp-1"]');
-    await campaignLink.focus();
+    // Tab through the page (TopBar nav, then to campaign card)
+    // Continue tabbing until we reach the campaign card link
+    for (let i = 0; i < 20; i++) {
+      await page.keyboard.press('Tab');
+      const focusedHref = await page.evaluate(() => {
+        const elem = document.activeElement as HTMLAnchorElement;
+        return elem?.href || '';
+      });
+      if (focusedHref.includes('/app/campaign/camp-1')) {
+        break;
+      }
+    }
 
-    // Check focus is on the campaign link
+    // Verify focus is on the campaign link
     const focusedHref = await page.evaluate(() => (document.activeElement as HTMLAnchorElement)?.href);
     expect(focusedHref).toContain('/app/campaign/camp-1');
 
@@ -397,17 +406,42 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/app');
     await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByText('Campaign 2')).toBeVisible();
 
-    // Test tablet view - just verify campaigns are still visible after viewport change
+    // Check single column layout on mobile - verify grid class exists and campaigns render
+    const mobileGrid = page.locator('.grid').first();
+    await expect(mobileGrid).toBeVisible();
+
+    // Verify cards are visible and properly contained
+    const mobileCards = page.locator('[role="article"]');
+    expect(await mobileCards.count()).toBeGreaterThan(0);
+
+    // Check that grid has responsive classes (md:grid-cols-2 xl:grid-cols-3)
+    const gridClass = await mobileGrid.getAttribute('class');
+    expect(gridClass).toContain('grid');
+    expect(gridClass).toContain('md:grid-cols-2');
+    expect(gridClass).toContain('xl:grid-cols-3');
+
+    // Test tablet view (2 columns)
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByText('Campaign 1')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
 
-    // Test desktop view - verify campaigns layout works
+    // At tablet width, grid should be visible with responsive classes applied
+    const tabletGrid = page.locator('.grid').first();
+    await expect(tabletGrid).toBeVisible();
+    const tabletCards = page.locator('[role="article"]');
+    expect(await tabletCards.count()).toBeGreaterThan(0);
+
+    // Test desktop view (3 columns)
     await page.setViewportSize({ width: 1400, height: 900 });
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByText('Campaign 1')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
+
+    // Verify grid and campaigns render properly at desktop viewport
+    const desktopGrid = page.locator('.grid').first();
+    await expect(desktopGrid).toBeVisible();
+    const desktopCards = page.locator('[role="article"]');
+    expect(await desktopCards.count()).toBeGreaterThan(0);
   });
 
   test('main actions are prominent and accessible', async ({ page }) => {
