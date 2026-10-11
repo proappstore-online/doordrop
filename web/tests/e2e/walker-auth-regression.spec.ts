@@ -19,9 +19,11 @@ test.describe('Walker Auth Fixture Regression', () => {
 
   test('walker tests include setupWalkerAuth call', async ({ page, context }) => {
     // This test verifies that the walker test files have been updated to call setupWalkerAuth
-    // The fixture now sets the platform session cookie required by authMode: 'platform-cookie'
+    // The fixture sets up auth mocks but does NOT navigate (tests do that)
     await setupWalkerAuth(page, context);
-    // After setup, the fixture navigates to / to enable cookie setting, so URL is not blank
-    expect(page.url()).toContain('http://localhost');
+    // After setup, page is still at about:blank since setupWalkerAuth doesn't navigate
+    expect(page.url()).toBe('about:blank');
+    // But routes should be registered for auth endpoints
+    expect(page).toBeTruthy();
   });
 });

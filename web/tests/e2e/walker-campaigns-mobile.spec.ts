@@ -5,10 +5,11 @@ test.describe("Walker Campaigns Page - Mobile UX", () => {
   test.beforeEach(async ({ page, context }) => {
     // Set mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    // Set up walker authentication (session cookie + mocked endpoints)
+
+    // Set up walker authentication FIRST (registers auth mocks, does NOT navigate)
     await setupWalkerAuth(page, context);
 
-    // Mock campaigns endpoint to return test data
+    // Then register additional endpoint mocks
     const mockCampaigns = [
       {
         id: 'campaign-1',
@@ -33,10 +34,13 @@ test.describe("Walker Campaigns Page - Mobile UX", () => {
         body: JSON.stringify(mockCampaigns),
       }),
     );
+
+    // Finally, navigate to campaigns page after ALL mocks are registered
+    await page.goto('/walker/campaigns');
   });
 
   test("renders tabs with campaign counts", async ({ page }) => {
-    // Wait for page to load
+    // Wait for page to load (already navigated in beforeEach)
     await page.waitForSelector('text="Job Discovery"');
 
     // Check all tabs are visible
