@@ -27,11 +27,21 @@ test.describe("Walker Campaigns Page - Mobile UX", () => {
       },
     ];
 
-    await page.route('**/.pas/worker/v1/campaigns*', (route) =>
+    // Mock campaigns endpoint
+    await page.route('**/.pas/worker/v1/campaigns**', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(mockCampaigns),
+      }),
+    );
+
+    // Mock interests endpoint (walker interests in campaigns)
+    await page.route('**/.pas/worker/v1/interests**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
       }),
     );
 

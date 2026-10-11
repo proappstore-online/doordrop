@@ -19,13 +19,22 @@ test.describe('Walker happy path (mocked)', () => {
     // Set up walker authentication FIRST (registers auth mocks, does NOT navigate)
     await setupWalkerAuth(page, context);
 
-    // Mock all campaigns endpoints - campaigns list and by walker
+    // Mock campaigns endpoint
     const campaignsBody = JSON.stringify(fakeCampaigns);
     await page.route('**/.pas/worker/v1/campaigns**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: campaignsBody,
+      });
+    });
+
+    // Mock interests endpoint (walker interests in campaigns)
+    await page.route('**/.pas/worker/v1/interests**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
       });
     });
 
