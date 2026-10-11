@@ -237,8 +237,6 @@ jobs:
             if(!r.stats){ console.error("FAIL: "+resultsPath+" missing stats"); process.exit(1); }
 
             const s=r.stats;
-            const totalTests=(s.expected||0)+(s.unexpected||0)+(s.flaky||0);
-            if(totalTests===0){ console.error("FAIL: no tests executed (expected, unexpected, and flaky are all 0)"); process.exit(1); }
 
             const specs=[];
             const walk=(su=[])=>su.forEach(x=>{ (x.specs||[]).forEach(sp=>specs.push({title:[x.title,sp.title].filter(Boolean).join(" > "),ok:sp.ok!==false})); walk(x.suites||[]); });
@@ -250,16 +248,31 @@ jobs:
               process.exit(1);
             }
 
-            // Validate counter values
-            const passedTests=Number.isInteger(s.expected) ? s.expected : 0;
-            const failedTests=Number.isInteger(s.unexpected) ? s.unexpected : 0;
-            const flakyTests=Number.isInteger(s.flaky) ? s.flaky : 0;
-            const skippedTests=Number.isInteger(s.skipped) ? s.skipped : 0;
-
-            if(passedTests<0 || failedTests<0 || flakyTests<0 || skippedTests<0){
-              console.error("FAIL: Negative test counts not allowed");
+            // Validate counter values: must be non-negative integers, not strings or other types
+            if(!Number.isInteger(s.expected) || s.expected<0){
+              console.error("FAIL: stats.expected must be a non-negative integer, got: "+JSON.stringify(s.expected));
               process.exit(1);
             }
+            if(!Number.isInteger(s.unexpected) || s.unexpected<0){
+              console.error("FAIL: stats.unexpected must be a non-negative integer, got: "+JSON.stringify(s.unexpected));
+              process.exit(1);
+            }
+            if(!Number.isInteger(s.flaky) || s.flaky<0){
+              console.error("FAIL: stats.flaky must be a non-negative integer, got: "+JSON.stringify(s.flaky));
+              process.exit(1);
+            }
+            if(!Number.isInteger(s.skipped) || s.skipped<0){
+              console.error("FAIL: stats.skipped must be a non-negative integer, got: "+JSON.stringify(s.skipped));
+              process.exit(1);
+            }
+
+            const passedTests=s.expected;
+            const failedTests=s.unexpected;
+            const flakyTests=s.flaky;
+            const skippedTests=s.skipped;
+
+            const totalTests=passedTests+failedTests+flakyTests;
+            if(totalTests===0){ console.error("FAIL: no tests executed (all counts are 0)"); process.exit(1); }
 
             const ok=failedTests===0 && totalTests>0;
             fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:passedTests, failed:failedTests, flaky:flakyTests, skipped:skippedTests, ok, specs }));
