@@ -910,7 +910,7 @@ test.describe('Campaign creation', () => {
       return route.fallthrough();
     });
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Select state
     await page.click('text=Select a state');
@@ -930,7 +930,7 @@ test.describe('Campaign creation', () => {
   });
 
   test('empty state shows validation error', async ({ page }) => {
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Leave state empty, fill others
     await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Melbourne');
@@ -942,7 +942,7 @@ test.describe('Campaign creation', () => {
     // Verify state error is shown
     await expect(page.getByText('State is required')).toBeVisible();
     // Should not navigate away
-    await expect(page).toHaveURL('/app/new-campaign');
+    await expect(page).toHaveURL('/app/setup');
   });
 
   test('empty suburb shows validation error', async ({ page }) => {
@@ -957,7 +957,7 @@ test.describe('Campaign creation', () => {
 
     // Verify suburb error is shown
     await expect(page.getByText('Suburb is required')).toBeVisible();
-    await expect(page).toHaveURL('/app/new-campaign');
+    await expect(page).toHaveURL('/app/setup');
   });
 
   test('invalid postcode shows validation error', async ({ page }) => {
@@ -974,7 +974,7 @@ test.describe('Campaign creation', () => {
 
     // Verify postcode error is shown
     await expect(page.getByText('Postcode must be a 4-digit number')).toBeVisible();
-    await expect(page).toHaveURL('/app/new-campaign');
+    await expect(page).toHaveURL('/app/setup');
   });
 
   test('form state is preserved on validation error', async ({ page }) => {
@@ -1129,7 +1129,7 @@ test.describe('Campaign creation', () => {
       return route.fallthrough();
     });
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Select state
     await page.click('text=Select a state');
@@ -1152,7 +1152,7 @@ test.describe('Campaign creation', () => {
   });
 
   test('clearing form errors when fields change', async ({ page }) => {
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Leave all fields empty and submit
     await page.click('button:has-text("Create Campaign")');

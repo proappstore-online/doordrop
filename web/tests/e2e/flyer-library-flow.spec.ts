@@ -115,7 +115,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Fill in campaign form
     const stateSelect = page.locator('input[placeholder="Select a state"]');
@@ -174,7 +174,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Fill in campaign form
     const stateSelect = page.locator('input[placeholder="Select a state"]');
@@ -290,7 +290,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Fill in campaign form
     const stateSelect = page.locator('input[placeholder="Select a state"]');
@@ -379,7 +379,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    await page.goto('/app/new-campaign');
+    await page.goto('/app/setup');
 
     // Fill in campaign form
     const stateSelect = page.locator('input[placeholder="Select a state"]');

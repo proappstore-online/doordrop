@@ -406,42 +406,62 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/app');
     await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Campaign 2')).toBeVisible();
 
-    // Check single column layout on mobile - verify grid class exists and campaigns render
-    const mobileGrid = page.locator('.grid').first();
+    // Verify grid layout: mobile defaults to single column
+    const mobileSection = page.locator('section').filter({ has: page.getByText('Campaign 1') }).first();
+    const mobileGrid = mobileSection.locator('.grid').first();
     await expect(mobileGrid).toBeVisible();
 
-    // Verify cards are visible and properly contained
-    const mobileCards = page.locator('[role="article"]');
-    expect(await mobileCards.count()).toBeGreaterThan(0);
+    // Check computed grid-template-columns on mobile (should be single column)
+    const mobileGridStyles = await mobileGrid.evaluate((el) => {
+      const styles = window.getComputedStyle(el);
+      return styles.gridTemplateColumns;
+    });
+    expect(mobileGridStyles).toMatch(/^\d+(\.\d+)?px$/); // Single column = one value
 
-    // Check that grid has responsive classes (md:grid-cols-2 xl:grid-cols-3)
-    const gridClass = await mobileGrid.getAttribute('class');
-    expect(gridClass).toContain('grid');
-    expect(gridClass).toContain('md:grid-cols-2');
-    expect(gridClass).toContain('xl:grid-cols-3');
+    // Verify cards don't overflow at mobile width
+    const mobileCards = mobileSection.locator('[role="article"]');
+    const mobileCardCount = await mobileCards.count();
+    expect(mobileCardCount).toBeGreaterThan(0);
+    const firstMobileCard = await mobileCards.first().boundingBox();
+    if (firstMobileCard) {
+      expect(firstMobileCard.right).toBeLessThanOrEqual(320); // No horizontal overflow
+    }
 
-    // Test tablet view (2 columns)
+    // Test tablet view (should show 2 columns via md:grid-cols-2)
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForLoadState('networkidle');
     await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
 
-    // At tablet width, grid should be visible with responsive classes applied
-    const tabletGrid = page.locator('.grid').first();
-    await expect(tabletGrid).toBeVisible();
-    const tabletCards = page.locator('[role="article"]');
-    expect(await tabletCards.count()).toBeGreaterThan(0);
+    const tabletSection = page.locator('section').filter({ has: page.getByText('Campaign 1') }).first();
+    const tabletGrid = tabletSection.locator('.grid').first();
 
-    // Test desktop view (3 columns)
+    // Check computed grid-template-columns at tablet width (md breakpoint = 768px)
+    const tabletGridStyles = await tabletGrid.evaluate((el) => {
+      const styles = window.getComputedStyle(el);
+      return styles.gridTemplateColumns;
+    });
+    // Should have 2 columns at tablet width
+    const tabletColumns = tabletGridStyles.split(' ').length;
+    expect(tabletColumns).toBe(2);
+
+    // Test desktop view (should show 3 columns via xl:grid-cols-3)
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.waitForLoadState('networkidle');
     await expect(page.getByText('Campaign 1')).toBeVisible({ timeout: 5_000 });
 
-    // Verify grid and campaigns render properly at desktop viewport
-    const desktopGrid = page.locator('.grid').first();
-    await expect(desktopGrid).toBeVisible();
-    const desktopCards = page.locator('[role="article"]');
-    expect(await desktopCards.count()).toBeGreaterThan(0);
+    const desktopSection = page.locator('section').filter({ has: page.getByText('Campaign 1') }).first();
+    const desktopGrid = desktopSection.locator('.grid').first();
+
+    // Check computed grid-template-columns at desktop width (xl breakpoint = 1280px)
+    const desktopGridStyles = await desktopGrid.evaluate((el) => {
+      const styles = window.getComputedStyle(el);
+      return styles.gridTemplateColumns;
+    });
+    // Should have 3 columns at desktop width
+    const desktopColumns = desktopGridStyles.split(' ').length;
+    expect(desktopColumns).toBe(3);
   });
 
   test('main actions are prominent and accessible', async ({ page }) => {

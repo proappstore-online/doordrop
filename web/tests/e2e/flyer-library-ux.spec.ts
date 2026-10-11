@@ -124,7 +124,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       });
     });
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Verify header
     await expect(page.getByRole('heading', { name: 'My Flyers' })).toBeVisible();
@@ -161,7 +161,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Wait for flyers to load
     await expect(page.getByText('Autumn Leaves')).toBeVisible({ timeout: 5_000 });
@@ -217,7 +217,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       });
     });
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Wait for flyers to load
     await expect(page.getByText('Autumn Leaves')).toBeVisible({ timeout: 5_000 });
@@ -262,7 +262,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Verify empty state messaging
     await expect(page.getByText('Build your flyer library')).toBeVisible({ timeout: 5_000 });
@@ -293,7 +293,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Wait for flyers to load
     await expect(page.getByText('Autumn Leaves')).toBeVisible({ timeout: 5_000 });
@@ -323,7 +323,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.goto('/app/my-flyers');
+    await page.goto('/app/flyers');
 
     // Wait for flyer to load
     await expect(page.getByText('Autumn Leaves')).toBeVisible({ timeout: 5_000 });
