@@ -1374,159 +1374,171 @@ test.describe('Flyer library error handling', () => {
   });
 
   test('flyer upload failure preserves form state', async ({ page }) => {
-    // Mock initial flyer list load (empty)
-    await page.route('**/v1/flyers', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify([]),
-      }),
+    const name = 'Test Flyer Upload';
+    const description = 'Test description for upload failure';
+    const uploadedUrl = 'https://storage.example.com/flyer-test.png';
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+      'base64',
     );
+    const events: string[] = [];
+    const storagePuts: { method: string; path: string; contentType: string | undefined; body: Buffer | null }[] = [];
+    const createBodies: Record<string, unknown>[] = [];
 
-    // Mock upload failure
-    let uploadAttempts = 0;
-    await page.route('**/v1/flyers', async (route) => {
+    await page.route('**/v1/apps/*/storage/**', (route) => {
+      if (route.request().method() !== 'PUT') return route.fallthrough();
+      events.push('PUT');
+      storagePuts.push({
+        method: route.request().method(),
+        path: new URL(route.request().url()).pathname,
+        contentType: route.request().headers()['content-type'],
+        body: route.request().postDataBuffer(),
+      });
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: uploadedUrl }),
+      });
+    });
+
+    await page.route('**/v1/users/flyer-user-123/flyers', (route) => {
       if (route.request().method() === 'POST') {
-        uploadAttempts++;
+        events.push('POST');
+        createBodies.push(route.request().postDataJSON());
         return route.fulfill({
           status: 500,
-          body: '{"error":"upload failed"}',
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Server error' }),
         });
       }
-      return route.fallthrough();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
 
     await page.goto('/app/flyers');
+    await page.getByRole('button', { name: '+ Add Flyer' }).click();
 
-    // Open form and fill fields
-    await page.click('button:has-text("Add Flyer")');
+    await page.locator('#flyer-name').fill(name);
+    await page.locator('#flyer-description').fill(description);
+    const fileInput = page.locator('#flyer-image');
+    await fileInput.setInputFiles({ name: 'test.png', mimeType: 'image/png', buffer: PNG });
 
-    const name = 'Test Flyer Upload';
-    const description = 'Test description for upload failure';
+    const preview = page.locator("img[alt='Flyer preview']");
+    await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
-    await page.fill('input[placeholder="e.g. Summer Sale"]', name);
-    await page.fill('input[placeholder="Any details about this flyer"]', description);
+    const selectedFiles = () =>
+      fileInput.evaluate((el: HTMLInputElement) =>
+        Array.from(el.files ?? []).map((f) => ({ name: f.name, type: f.type, size: f.size })),
+      );
+    expect(await selectedFiles()).toEqual([{ name: 'test.png', type: 'image/png', size: PNG.length }]);
 
-    // Upload file
-    const fileInput = page.locator('input[type="file"]');
-    await fileInput.setInputFiles({
-      name: 'test.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from('fake-png-data'),
-    });
+    await page.getByRole('button', { name: 'Save Flyer' }).click();
 
-    // Submit form (will fail)
-    await page.click('button:has-text("Save Flyer")');
-
-    // Wait for error
-    await page.waitForTimeout(500);
-
-    // Verify error message is shown
-    await expect(page.getByText(/couldn\'t save this flyer/i)).toBeVisible();
-
-    // Verify form state is preserved
-    await expect(page.locator('input[placeholder="e.g. Summer Sale"]')).toHaveValue(name);
-    await expect(page.locator('input[placeholder="Any details about this flyer"]')).toHaveValue(
-      description,
+    await expect(page.getByRole('alert')).toContainText(
+      'We couldn’t save this flyer. Your details and selected file are still here—please try again.',
     );
+    await expect(page.locator('#flyer-name')).toHaveValue(name);
+    await expect(page.locator('#flyer-description')).toHaveValue(description);
+    await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    expect(await selectedFiles()).toEqual([{ name: 'test.png', type: 'image/png', size: PNG.length }]);
 
-    // File preview should still be visible
-    await expect(page.locator('img[alt="Preview"]')).toBeVisible();
+    expect(events).toEqual(['PUT', 'POST']);
+    expect(storagePuts).toHaveLength(1);
+    expect(storagePuts[0].method).toBe('PUT');
+    expect(storagePuts[0].path).toMatch(/\/storage\/_public\/users\/flyer-user-123\/flyers\/[^/]+\.png$/);
+    expect(storagePuts[0].contentType).toBe('image/png');
+    expect(storagePuts[0].body?.equals(PNG)).toBe(true);
+    expect(createBodies).toHaveLength(1);
+    expect(createBodies[0]).toMatchObject({ name, description, file_url: uploadedUrl });
   });
 
   test('flyer delete failure shows error', async ({ page }) => {
-    // Mock flyer list with one flyer
-    await page.route('**/v1/flyers', (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill({
-          status: 200,
-          body: JSON.stringify([
-            { id: 'flyer1', name: 'Flyer 1', createdAt: Date.now(), fileUrl: 'http://example.com/flyer1.png' },
-          ]),
-        });
-      }
-      // Mock delete failure
-      if (route.request().method() === 'DELETE') {
-        return route.fulfill({
-          status: 500,
-          body: '{"error":"delete failed"}',
-        });
-      }
-      return route.fallthrough();
+    let deleteAttempts = 0;
+
+    await page.route('**/v1/users/flyer-user-123/flyers', (route) => {
+      if (route.request().method() !== 'GET') return route.fallthrough();
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'flyer1',
+            name: 'Flyer 1',
+            description: 'Test flyer',
+            file_url: 'https://example.com/flyer1.png',
+            created_at: '2024-01-01T00:00:00Z',
+          },
+        ]),
+      });
+    });
+
+    await page.route('**/v1/users/flyer-user-123/flyers/flyer1/campaigns', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+    );
+
+    await page.route('**/v1/users/flyer-user-123/flyers/flyer1', (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallthrough();
+      deleteAttempts++;
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Server error' }),
+      });
     });
 
     await page.goto('/app/flyers');
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Flyer 1' })).toBeVisible();
 
-    // Hover to show delete button
-    await page.hover('text=Flyer 1');
-
-    // Mock confirm dialog
     page.once('dialog', (dialog) => {
       void dialog.accept();
     });
+    await page.getByRole('button', { name: 'Delete Flyer 1' }).click();
 
-    // Click delete
-    await page.click('button:has-text("Delete")');
-
-    // Wait for error feedback
-    await page.waitForTimeout(500);
-
-    // Verify error is shown
-    await expect(page.getByText(/couldn\'t remove this flyer/i)).toBeVisible();
-
-    // Flyer should still be in list
-    await expect(page.getByText('Flyer 1')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('We couldn’t remove this flyer. Please try again.');
+    await expect(page.getByRole('heading', { name: 'Flyer 1' })).toBeVisible();
+    expect(deleteAttempts).toBe(1);
   });
 
   test('button cannot be double-submitted during flyer creation', async ({ page }) => {
-    let uploadCount = 0;
+    let postCount = 0;
+    let releaseCreate!: () => void;
+    const createReleased = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
 
-    await page.route('**/v1/flyers', (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill({
-          status: 200,
-          body: JSON.stringify([]),
-        });
-      }
+    await page.route('**/v1/users/flyer-user-123/flyers', async (route) => {
       if (route.request().method() === 'POST') {
-        uploadCount++;
-        // Simulate slow upload
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            resolve(
-              route.fulfill({
-                status: 201,
-                body: JSON.stringify({ id: `flyer${uploadCount}`, name: 'Test Flyer' }),
-              }),
-            );
-          }, 1000);
+        postCount++;
+        await createReleased;
+        return route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'new-flyer' }),
         });
       }
-      return route.fallthrough();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
 
     await page.goto('/app/flyers');
+    await page.getByRole('button', { name: '+ Add Flyer' }).click();
+    await page.locator('#flyer-name').fill('My Flyer');
+    await page.getByRole('button', { name: 'Save Flyer' }).click();
 
-    await page.click('button:has-text("Add Flyer")');
-    await page.fill('input[placeholder="e.g. Summer Sale"]', 'My Flyer');
+    const pendingButton = page.getByRole('button', { name: 'Uploading...' });
+    await expect(pendingButton).toBeDisabled();
+    expect(postCount).toBe(1);
 
-    const submitButton = page.locator('button:has-text("Save Flyer")');
+    const box = await pendingButton.boundingBox();
+    if (!box) throw new Error('pending save button has no bounding box');
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.click(cx, cy);
+    await page.mouse.click(cx, cy);
+    expect(postCount).toBe(1);
 
-    // Click save button
-    await submitButton.click();
-
-    // Button should be disabled immediately
-    await expect(submitButton).toBeDisabled();
-
-    // Try clicking again (should be ignored)
-    await submitButton.click();
-    await submitButton.click();
-
-    // Wait for request to complete
-    await page.waitForLoadState('networkidle');
-
-    // Only one upload should have occurred
-    expect(uploadCount).toBe(1);
+    releaseCreate();
+    await expect(page.getByRole('status')).toContainText('Flyer saved to your library.');
+    await expect(page.getByRole('heading', { name: 'My Flyer', exact: true })).toBeVisible();
+    expect(postCount).toBe(1);
   });
 });
 
