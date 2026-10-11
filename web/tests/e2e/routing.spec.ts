@@ -193,7 +193,8 @@ test.describe('Role selection routing', () => {
     // Submit as client - click the button containing the "I'm a client" text
     await page.locator('button', { has: page.locator('text="I\'m a client"') }).first().click();
 
-    // Should redirect to /app
+    // Should redirect to /app (wait for navigation)
+    await page.waitForURL('/app', { timeout: 5000 });
     await expect(page).toHaveURL('/app');
   });
 

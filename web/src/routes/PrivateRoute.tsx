@@ -39,8 +39,8 @@ export default function PrivateRoute({ allowedRoles }: Props) {
   // Unprotected routes (no allowedRoles) wait for userData to load before rendering
   // Exception: /select-role allows rendering when needsRoleSelection=true (no userData yet)
   if (!userData) {
-    if (needsRoleSelection) {
-      // Authenticated user needing role selection — allow /select-role to render
+    if (needsRoleSelection && location.pathname === '/select-role') {
+      // Authenticated user needing role selection on /select-role — allow rendering
       return <Outlet />;
     }
     return <LoadingScreen />;

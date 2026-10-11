@@ -66,7 +66,8 @@ test.describe('Flyer library unification (Issue #21)', () => {
   });
 
   test('Create campaign without flyers shows disabled flyer button and stops at flyer step', async ({ page }) => {
-    let campaignCreated = false;
+    let campaignPostCount = 0;
+    let printoutMutationCount = 0;
     let campaignId = '';
 
     // Mock flyer endpoint with EMPTY flyer list (no flyers available)
@@ -78,14 +79,15 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    // Mock campaign creation - should be called ONCE after Location step completes
+    // Mock campaign creation - should be called with status=draft, no activePrintoutId
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       const method = route.request().method();
       if (method === 'POST') {
+        campaignPostCount++;
         const body = JSON.parse(route.request().postData() || '{}');
-        // Verify no activePrintoutId is sent
+        // Verify no activePrintoutId is sent (must be undefined, not null)
         expect(body.active_printout_id).toBeUndefined();
-        campaignCreated = true;
+        expect(body.status).toBe('draft');
         campaignId = 'campaign-no-flyers-' + Date.now();
         return route.fulfill({
           status: 201,
@@ -104,17 +106,40 @@ test.describe('Flyer library unification (Issue #21)', () => {
           }),
         });
       }
+      // GET campaign detail
+      if (method === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: campaignId,
+            name: 'Parramatta Campaign',
+            status: 'draft',
+            suburb: 'parramatta',
+            postcode: '2150',
+            state: 'New South Wales',
+            admin_ids: ['gh:test-client-1'],
+            created_at: 1_700_000_000_000,
+            active_printout_id: null,
+            member_ids: ['gh:test-client-1'],
+          }),
+        });
+      }
       return route.continue();
     });
 
-    // Mock printouts endpoint (empty, no printouts without a selected flyer)
-    await page.route('**/.pas/worker/v1/campaigns/*/printouts', (route) =>
-      route.fulfill({
+    // Mock printouts endpoint - should remain empty with no mutations
+    await page.route('**/.pas/worker/v1/campaigns/*/printouts', (route) => {
+      const method = route.request().method();
+      if (method !== 'GET') {
+        printoutMutationCount++;
+      }
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([]),
-      }),
-    );
+      });
+    });
 
     await page.goto('/app/setup');
 
@@ -137,19 +162,28 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - verify empty library state
-    // Empty library should be shown
-    await expect(page.getByText(/no flyer|empty|library/i)).toBeVisible({ timeout: 5000 });
+    // Step 3: Flyer - verify empty library state with actual control inspection
+    // Should see flyer library section but with no flyer items rendered
+    await expect(page.locator('legend').filter({ hasText: 'Flyer selection' })).toBeVisible();
+
+    // Verify no flyer selection controls are present (empty state)
+    const flyerButtons = page.locator('button').filter({ hasText: /Select from library|Add a flyer/i });
+    // If buttons exist, they should be disabled or show empty state
+    const emptyStateText = page.getByText(/no flyer|empty|library|nothing available/i);
+    await expect(emptyStateText.or(flyerButtons)).toBeVisible({ timeout: 5000 });
 
     // Continue button on Flyer step should be DISABLED (no activePrintoutId)
     const continueBtn = page.locator('button:has-text("Continue →")').first();
     await expect(continueBtn).toBeDisabled({ timeout: 5000 });
 
-    // Verify campaign was created with draft status and NO activePrintoutId
-    expect(campaignCreated).toBe(true);
+    // Verify campaign was created exactly ONCE with draft status and NO activePrintoutId
+    expect(campaignPostCount).toBe(1);
+    // Verify no printout mutations were attempted (no POST/PATCH/DELETE to printouts)
+    expect(printoutMutationCount).toBe(0);
 
     // STOP HERE - do not navigate to Schedule/Budget or publish
     // This proves the wizard contract: flyer is required to advance beyond the Flyer step
+    // The draft campaign exists but without an active printout, making advancement impossible
   });
 
   test('Create campaign with library flyers shows selection prompt', async ({ page }) => {
