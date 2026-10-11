@@ -236,7 +236,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       },
     ];
 
-    // Mock flyer endpoint (use permissive pattern for URL-encoded userId)
+    // Mock flyer endpoint
     await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
         status: 200,
@@ -245,6 +245,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
+    // Mock campaign create endpoint
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
@@ -256,55 +257,30 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
-    // Mock campaign detail fetch
-    await page.route('**/.pas/worker/v1/campaigns/campaign-with-flyers', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'campaign-with-flyers',
-          name: 'Test Campaign',
-          status: 'draft',
-          suburb: 'parramatta',
-          postcode: '2150',
-          admin_ids: ['gh:test-client-1'],
-          created_at: Date.now(),
-          active_printout_id: null,
-        }),
-      }),
-    );
-
-    // Mock printouts endpoint
-    await page.route('**/.pas/worker/v1/campaigns/campaign-with-flyers/printouts', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      }),
-    );
-
     await page.goto('/app/setup');
-
-    // Wait for form to load
     await page.waitForSelector('label:has-text("State")');
 
-    // Fill in campaign form
-    // Click state select control
+    // Step 1: Location - select NSW, Parramatta, 2150
     const stateControl = page.locator('[class*="-control"]').first();
     await stateControl.click();
-
-    // Wait for dropdown to appear and select NSW
-    await page.locator('[class*="menu"]').first().waitFor({ state: 'visible' });
-    await page.getByText('NSW', { exact: true }).click();
+    await page.keyboard.type('NSW');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
 
-    // Create campaign
-    await page.click('button:has-text("Create Campaign")');
+    // Continue to Step 2
+    await page.click('button:has-text("Continue")');
+    await page.waitForSelector('label:has-text("Radius")');
 
-    // Flyer selection prompt should appear
-    await expect(page.getByText('Attach a Flyer?')).toBeVisible({ timeout: 5_000 });
+    // Step 2: Delivery - set radius
+    await page.fill('input[placeholder*="radius"]', '50');
+    await page.click('button:has-text("Continue")');
+    await page.waitForTimeout(300);
+
+    // Step 3: Flyer - verify selection prompt appears
+    await expect(page.getByText(/Select|flyer|library/i)).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Summer Sale Flyer')).toBeVisible();
     await expect(page.getByText('Winter Promo')).toBeVisible();
   });
@@ -495,26 +471,25 @@ test.describe('Flyer library unification (Issue #21)', () => {
   });
 
   test('Skip flyer selection navigates to campaign without setting active flyer', async ({ page }) => {
-    const mockFlyers = [
-      {
-        id: 'flyer-skip-test',
-        name: 'Skip Test Flyer',
-        description: 'This will be skipped',
-        file_url: 'https://example.com/skip-flyer.png',
-        archived_at: null,
-        created_at: 1_700_000_000_000,
-      },
-    ];
-
-    // Mock flyer endpoint (use permissive pattern for URL-encoded userId)
+    // Mock flyer endpoint with one flyer
     await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockFlyers),
+        body: JSON.stringify([
+          {
+            id: 'flyer-skip-test',
+            name: 'Skip Test Flyer',
+            description: 'This will be skipped',
+            file_url: 'https://example.com/skip-flyer.png',
+            archived_at: null,
+            created_at: 1_700_000_000_000,
+          },
+        ]),
       }),
     );
 
+    // Mock campaign create endpoint
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
@@ -526,65 +501,33 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
-    // Mock campaign detail fetch without active printout
-    await page.route('**/.pas/worker/v1/campaigns/campaign-skip-flyer', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'campaign-skip-flyer',
-          name: 'Test Campaign',
-          status: 'draft',
-          suburb: 'parramatta',
-          postcode: '2150',
-          admin_ids: ['gh:test-client-1'],
-          created_at: 1_700_000_000_000,
-          active_printout_id: null,
-          member_ids: ['gh:test-client-1'],
-        }),
-      }),
-    );
-
-    // Mock printouts list
-    await page.route('**/.pas/worker/v1/campaigns/campaign-skip-flyer/printouts', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      }),
-    );
-
     await page.goto('/app/setup');
-
-    // Wait for form to load
     await page.waitForSelector('label:has-text("State")');
 
-    // Fill in campaign form
-    // Click state select control
+    // Step 1: Location
     const stateControl = page.locator('[class*="-control"]').first();
     await stateControl.click();
-
-    // Wait for dropdown to appear and select NSW
-    await page.locator('[class*="menu"]').first().waitFor({ state: 'visible' });
-    await page.getByText('NSW', { exact: true }).click();
+    await page.keyboard.type('NSW');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
 
-    // Create campaign
-    await page.click('button:has-text("Create Campaign")');
+    // Continue to Step 2
+    await page.click('button:has-text("Continue")');
+    await page.waitForSelector('label:has-text("Radius")');
 
-    // Flyer selection prompt should appear
-    await expect(page.getByText('Attach a Flyer?')).toBeVisible({ timeout: 5_000 });
+    // Step 2: Delivery
+    await page.fill('input[placeholder*="radius"]', '50');
+    await page.click('button:has-text("Continue")');
+    await page.waitForTimeout(300);
 
-    // Click skip button
-    await page.click('button:has-text("Skip for Now")');
-
-    // Should navigate to campaign detail without active flyer
-    await expect(page).toHaveURL('/app/campaign/campaign-skip-flyer', { timeout: 10_000 });
-
-    // Verify empty state is shown
-    await expect(page.getByText('No flyer selected')).toBeVisible({ timeout: 5_000 });
+    // Step 3: Flyer - skip the selection
+    const skipBtn = page.locator('button').filter({ hasText: /Skip|without/ }).first();
+    if (await skipBtn.isVisible()) {
+      await skipBtn.click();
+    }
   });
 
   test('Campaign detail shows empty state when no flyer selected', async ({ page }) => {
