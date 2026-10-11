@@ -11,6 +11,9 @@ test.describe('Flyer library UX (Issue #50)', () => {
     photo_url: null,
     role: 'client',
     created_at: 1_700_000_000_000,
+    clientProfile: {
+      onboardingCompleted: true,
+    },
   };
 
   const mockFlyers = [

@@ -11,6 +11,9 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     photo_url: null,
     role: 'client' as const,
     created_at: 1_700_000_000_000,
+    clientProfile: {
+      onboardingCompleted: true,
+    },
   };
 
   test.beforeEach(async ({ page, context }) => {

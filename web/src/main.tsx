@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ProProvider } from '@proappstore/sdk';
 import './index.css';
 import App from './App.tsx';
 import { ThemeModeProvider } from './ThemeModeProvider';
@@ -15,10 +16,12 @@ await pas.auth.init();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <ThemeModeProvider>
-        <App />
-        <ToastContainer position="bottom-center" autoClose={4000} />
-      </ThemeModeProvider>
+      <ProProvider app={pas}>
+        <ThemeModeProvider>
+          <App />
+          <ToastContainer position="bottom-center" autoClose={4000} />
+        </ThemeModeProvider>
+      </ProProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
