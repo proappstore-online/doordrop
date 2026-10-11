@@ -162,11 +162,14 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     const LIBRARY_FLYER_ID = 'lib-flyer-456';
     const PRINTOUT_ID = 'cp-789';
     const CAMPAIGN_ID = 'test-campaign-123';
+    const draftKey = 'campaign_draft_gh:test-client-1';
 
     // Track state mutations
     let capturedPrintouts: any[] = [];
     let capturedPatches: any[] = [];
     let printoutCreatedBody: any = null;
+    let campaignPostCount = 0;
+    let capturedCampaignState = { status: 'draft', active_printout_id: null as string | null };
 
     // Mock library flyers endpoint
     await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
@@ -210,6 +213,7 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     // Mock campaign creation
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       if (route.request().method() === 'POST') {
+        campaignPostCount++;
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
@@ -232,30 +236,32 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
       if (route.request().method() === 'PATCH') {
         const patchBody = JSON.parse(route.request().postData() || '{}');
         capturedPatches.push(patchBody);
+        // Update the fake server state
+        if (patchBody.status) capturedCampaignState.status = patchBody.status;
+        if (patchBody.active_printout_id) capturedCampaignState.active_printout_id = patchBody.active_printout_id;
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
             id: CAMPAIGN_ID,
             name: 'Test Campaign',
-            status: patchBody.status || 'draft',
-            active_printout_id: patchBody.active_printout_id || (capturedPatches.length > 0 ? capturedPatches[0].active_printout_id : null),
+            status: capturedCampaignState.status,
+            active_printout_id: capturedCampaignState.active_printout_id,
             suburb: 'test',
             postcode: '2150',
             state: 'New South Wales',
           }),
         });
       }
-      // GET: derive active_printout_id from latest PATCH, or null
-      const lastPatch = capturedPatches.length > 0 ? capturedPatches[capturedPatches.length - 1] : null;
+      // GET: return current server state
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           id: CAMPAIGN_ID,
           name: 'Test Campaign',
-          status: lastPatch?.status || 'draft',
-          active_printout_id: lastPatch?.active_printout_id || null,
+          status: capturedCampaignState.status,
+          active_printout_id: capturedCampaignState.active_printout_id,
           suburb: 'test',
           postcode: '2150',
           state: 'New South Wales',
@@ -306,6 +312,62 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     );
     expect(draft.data.activePrintoutId).toBe(PRINTOUT_ID);
     expect(draft.data.activePrintoutId).not.toBe(LIBRARY_FLYER_ID);
+
+    // --- Step 3: Reload and verify draft restoration ---
+    await page.reload();
+    await page.waitForSelector('input#start-date', { timeout: 15000 });
+
+    const restoredDraftRaw2 = await page.evaluate((key) => localStorage.getItem(key), draftKey);
+    expect(restoredDraftRaw2).not.toBeNull();
+    const restoredDraft2 = JSON.parse(restoredDraftRaw2!);
+    expect(restoredDraft2.campaignId).toBe(CAMPAIGN_ID);
+    expect(restoredDraft2.data.activePrintoutId).toBe(PRINTOUT_ID);
+    // After reload, no second campaign POST or printout POST should have occurred
+    expect(capturedPrintouts.length).toBe(1);
+    expect(campaignPostCount).toBe(1);
+    // Server mock still has draft status with no active printout until PATCH
+    const mockCampaignBeforePatch = capturedCampaignState;
+    expect(mockCampaignBeforePatch.status).toBe('draft');
+    expect(mockCampaignBeforePatch.active_printout_id).toBeNull();
+
+    // --- Step 4: Fill ScheduleBudgetStep and continue ---
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 14);
+    const futureDateStr = futureDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    await page.fill('input#start-date', futureDateStr);
+    await page.fill('input#budget', '500');
+    await page.click('button:has-text("Continue")');
+
+    // --- Step 5: Wait for Review step and Publish ---
+    // Wait for the review/readiness content
+    await page.waitForSelector('text=Publish Campaign', { timeout: 15000 });
+
+    // Verify the Publish Campaign button is present (Review step rendered)
+    const publishButton = page.locator('button:has-text("Publish Campaign")');
+    await expect(publishButton).toBeVisible();
+
+    // Click Publish Campaign
+    await publishButton.click();
+
+    // Wait for PATCH to be captured (the fake handles it synchronously in the route handler)
+    await page.waitForTimeout(500);
+
+    // Assert exactly one PATCH was made
+    expect(capturedPatches.length).toBe(1);
+    const patchBody = capturedPatches[0];
+    // active_printout_id must equal the returned printout ID (not the library flyer ID)
+    expect(patchBody.active_printout_id).toBe(PRINTOUT_ID);
+    expect(patchBody.active_printout_id).not.toBe(LIBRARY_FLYER_ID);
+    expect(patchBody.status).toBe('ready');
+
+    // Verify fake campaign state was updated
+    expect(capturedCampaignState.status).toBe('ready');
+    expect(capturedCampaignState.active_printout_id).toBe(PRINTOUT_ID);
+
+    // --- Step 6: Assert draft is cleared after successful publish ---
+    const draftAfterPublish = await page.evaluate((key) => localStorage.getItem(key), draftKey);
+    expect(draftAfterPublish).toBeNull();
   });
 
   test('#21: failed printout creation shows error', async ({ page }) => {
@@ -405,9 +467,7 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     const continueBtn = page.locator('button:has-text("Continue →")').first();
     await expect(continueBtn).toBeDisabled();
 
-    // Verify no PATCH was sent to campaign (error means no update)
-    const patchRequests = await page.context().routing;
-    // The campaign should still be in draft state
+    // The campaign should still be in draft state (no PATCH sent due to error)
     expect(campaignId).toBe('test-campaign-fail');
   });
 });
