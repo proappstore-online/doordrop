@@ -98,6 +98,16 @@ test.describe('Client onboarding requirement', () => {
   });
 
   test('incomplete profile does NOT redirect from /app/onboarding', async ({ page }) => {
+    const FAKE_USER = { id: 'client-incomplete-3', login: 'test-client', avatarUrl: null };
+
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
 
     // Mock /v1/me with incomplete client profile
     await page.route('**/v1/me', (route) =>
@@ -124,6 +134,16 @@ test.describe('Client onboarding requirement', () => {
 
   test('incomplete profile does NOT redirect from profile edit page', async ({ page }) => {
     const userId = 'client-incomplete-4';
+    const FAKE_USER = { id: userId, login: 'test-client', avatarUrl: null };
+
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
 
     // Mock /v1/me with incomplete client profile
     await page.route('**/v1/me', (route) =>
@@ -149,6 +169,16 @@ test.describe('Client onboarding requirement', () => {
   });
 
   test('completed profile does NOT redirect from /app', async ({ page }) => {
+    const FAKE_USER = { id: 'client-complete-1', login: 'test-client', avatarUrl: null };
+
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
 
     // Mock /v1/me with completed client profile
     await page.route('**/v1/me', (route) =>
@@ -200,6 +230,16 @@ test.describe('Client onboarding requirement', () => {
   });
 
   test('completed profile allows /app/setup access', async ({ page }) => {
+    const FAKE_USER = { id: 'client-complete-2', login: 'test-client', avatarUrl: null };
+
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
 
     // Mock /v1/me with completed profile
     await page.route('**/v1/me', (route) =>
@@ -240,6 +280,16 @@ test.describe('Client onboarding requirement', () => {
   });
 
   test('incomplete profile shows onboarding banner on first load', async ({ page }) => {
+    const FAKE_USER = { id: 'client-incomplete-7', login: 'test-client', avatarUrl: null };
+
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
 
     // Mock /v1/me with incomplete client profile
     await page.route('**/v1/me', (route) =>

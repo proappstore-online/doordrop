@@ -244,9 +244,26 @@ jobs:
             const walk=(su=[])=>su.forEach(x=>{ (x.specs||[]).forEach(sp=>specs.push({title:[x.title,sp.title].filter(Boolean).join(" > "),ok:sp.ok!==false})); walk(x.suites||[]); });
             walk(r.suites||[]);
 
-            const ok=(s.unexpected||0)===0 && totalTests>0;
-            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:s.expected||0, failed:s.unexpected||0, flaky:s.flaky||0, skipped:s.skipped||0, ok, specs }));
-            console.log("Processed results: "+(s.expected||0)+" passed, "+(s.unexpected||0)+" failed, "+(s.flaky||0)+" flaky, "+(s.skipped||0)+" skipped");
+            // Check for fatal/global errors in the report
+            if(r.errors && Array.isArray(r.errors) && r.errors.length>0){
+              console.error("FAIL: Report contains errors: "+r.errors.map(e=>typeof e==="string"?e:e.message).join("; "));
+              process.exit(1);
+            }
+
+            // Validate counter values
+            const passedTests=Number.isInteger(s.expected) ? s.expected : 0;
+            const failedTests=Number.isInteger(s.unexpected) ? s.unexpected : 0;
+            const flakyTests=Number.isInteger(s.flaky) ? s.flaky : 0;
+            const skippedTests=Number.isInteger(s.skipped) ? s.skipped : 0;
+
+            if(passedTests<0 || failedTests<0 || flakyTests<0 || skippedTests<0){
+              console.error("FAIL: Negative test counts not allowed");
+              process.exit(1);
+            }
+
+            const ok=failedTests===0 && totalTests>0;
+            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:passedTests, failed:failedTests, flaky:flakyTests, skipped:skippedTests, ok, specs }));
+            console.log("Processed results: "+passedTests+" passed, "+failedTests+" failed, "+flakyTests+" flaky, "+skippedTests+" skipped");
           '
           # Keyless (#57): mint an OIDC token bound to this repo instead of the
           # shared INTERNAL_TOKEN. kb-host derives the app prefix from the
