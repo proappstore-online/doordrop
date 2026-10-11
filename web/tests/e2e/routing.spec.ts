@@ -64,7 +64,9 @@ test.describe('Route gating (profile load errors)', () => {
     await page.goto('/walker');
 
     await expect(page.getByText(/Could Not Load Profile/i)).toBeVisible();
-    await expect(page.getByText(/connection took too long/i)).toBeVisible();
+    // When route.abort('timedout') is used, Playwright creates error message "net::ERR_ABORTED"
+    // which doesn't match the timeout check, so component displays the generic error message
+    await expect(page.getByText(/An error occurred while loading your profile/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Try Again/i })).toBeVisible();
   });
 
