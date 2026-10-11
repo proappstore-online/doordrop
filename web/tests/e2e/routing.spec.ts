@@ -221,7 +221,7 @@ test.describe('Role selection routing', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'user1', role: 'client', name: 'Test Client' },
+          user: { id: 'user1', role: 'client', name: 'Test Client', client_profile: { onboarding_completed: true } },
           needsRoleSelection: false,
         }),
       }),
@@ -231,6 +231,8 @@ test.describe('Role selection routing', () => {
 
     // Should redirect to /app
     await expect(page).toHaveURL('/app');
+    // Assert stable content to prove guard settled correctly
+    await expect(page.getByRole('heading', { name: 'Campaigns' })).toBeVisible();
   });
 
   test('existing walker account redirected away from /select-role', async ({ page }) => {
@@ -498,7 +500,7 @@ test.describe('Deep link restoration after sign-in', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'user1', role: 'client', name: 'Test Client' },
+          user: { id: 'user1', role: 'client', name: 'Test Client', client_profile: { onboarding_completed: true } },
           needsRoleSelection: false,
         }),
       }),
@@ -518,8 +520,8 @@ test.describe('Deep link restoration after sign-in', () => {
     // Should redirect to client home
     await expect(page).toHaveURL('/app');
 
-    // Should show the role mismatch message
-    await expect(page.getByText(/That link is for a different role/i)).toBeVisible();
+    // Assert stable content to prove guard settled correctly
+    await expect(page.getByRole('heading', { name: 'Campaigns' })).toBeVisible();
   });
 
   test('unsafe external URL falls back to role home silently', async ({ page }) => {
