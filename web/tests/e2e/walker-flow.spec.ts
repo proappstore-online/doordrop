@@ -15,9 +15,9 @@ test.describe('Walker happy path (mocked)', () => {
     },
   ];
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
     // Set up walker authentication using shared fixture
-    await setupWalkerAuth(page);
+    await setupWalkerAuth(page, context);
 
     // Mock campaigns endpoint
     await page.route(/\/\.pas\/worker\/v1\/campaigns(\?|$)/, (route) =>

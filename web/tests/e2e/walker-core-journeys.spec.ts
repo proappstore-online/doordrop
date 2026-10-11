@@ -17,11 +17,11 @@ import { setupWalkerAuth } from './fixtures/walker-auth';
  */
 
 test.describe('Walker Core Journeys', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
     // Set mobile viewport for walker-primary context
     await page.setViewportSize({ width: 390, height: 844 });
-    // Set up walker authentication (localStorage + mocked endpoints)
-    await setupWalkerAuth(page);
+    // Set up walker authentication (session cookie + mocked endpoints)
+    await setupWalkerAuth(page, context);
   });
 
   // ============================================================================

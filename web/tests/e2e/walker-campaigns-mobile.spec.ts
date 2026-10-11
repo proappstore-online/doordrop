@@ -2,11 +2,37 @@ import { test, expect } from "@playwright/test";
 import { setupWalkerAuth } from "./fixtures/walker-auth";
 
 test.describe("Walker Campaigns Page - Mobile UX", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
     // Set mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    // Set up walker authentication (localStorage + mocked endpoints)
-    await setupWalkerAuth(page);
+    // Set up walker authentication (session cookie + mocked endpoints)
+    await setupWalkerAuth(page, context);
+
+    // Mock campaigns endpoint to return test data
+    const mockCampaigns = [
+      {
+        id: 'campaign-1',
+        name: 'Test Campaign 1',
+        status: 'ready',
+        suburb: 'sydney',
+        postcode: '2000',
+        admin_ids: ['admin-1'],
+        assigned_walker_id: null,
+        doors: 150,
+        pay: 25.5,
+        due_date: new Date().toISOString(),
+        radius_meters: 50,
+        created_at: 1700000000000,
+      },
+    ];
+
+    await page.route('**/.pas/worker/v1/campaigns*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockCampaigns),
+      }),
+    );
   });
 
   test("renders tabs with campaign counts", async ({ page }) => {
