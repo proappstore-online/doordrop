@@ -35,6 +35,19 @@ const FAKE_TOKEN = 'fake-session-token';
  * 4. Catch-all for any other auth-related endpoints the SDK might call
  */
 export async function setupWalkerAuth(page: Page, context: BrowserContext) {
+  // Set localStorage session and cookie (will be available when page loads)
+  await page.addInitScript(
+    ({ token, user }) => {
+      localStorage.setItem(
+        'fas:session:doordrop',
+        JSON.stringify({ token, user, savedAt: Date.now() }),
+      );
+      // Set the session cookie via document.cookie
+      document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
+    },
+    { token: FAKE_TOKEN, user: FAKE_WALKER_USER },
+  );
+
   // Register auth endpoint mocks BEFORE page navigation
   // Any additional endpoint mocks should be registered by the test AFTER this call
 
@@ -69,22 +82,6 @@ export async function setupWalkerAuth(page: Page, context: BrowserContext) {
       route.continue();
     }
   });
-
-  // Set localStorage and cookie via init script that runs before page load
-  // This allows authentication to work without pre-navigating the page
-  await page.addInitScript(
-    ({ token, user }) => {
-      // Set localStorage session
-      localStorage.setItem(
-        'fas:session:doordrop',
-        JSON.stringify({ token, user, savedAt: Date.now() }),
-      );
-      // Set the session cookie via document.cookie
-      // The cookie will be available for the SDK when it initializes
-      document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
-    },
-    { token: FAKE_TOKEN, user: FAKE_WALKER_USER },
-  );
 
   // NOTE: Do NOT call page.goto() here.
   // Tests must call page.goto() themselves after all mocks are registered.
