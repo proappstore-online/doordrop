@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupWalkerAuth } from './fixtures/walker-auth';
 
 /**
  * Walker Mobile Accessibility Tests
@@ -17,6 +18,8 @@ test.describe('Walker Mobile Accessibility', () => {
   test.beforeEach(async ({ page }) => {
     // iPhone SE / common mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
+    // Set up walker authentication (localStorage + mocked endpoints)
+    await setupWalkerAuth(page);
   });
 
   // ============================================================================

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupWalkerAuth } from './fixtures/walker-auth';
 
 /**
  * Walker Core Journeys - End-to-End Tests
@@ -19,6 +20,8 @@ test.describe('Walker Core Journeys', () => {
   test.beforeEach(async ({ page }) => {
     // Set mobile viewport for walker-primary context
     await page.setViewportSize({ width: 390, height: 844 });
+    // Set up walker authentication (localStorage + mocked endpoints)
+    await setupWalkerAuth(page);
   });
 
   // ============================================================================

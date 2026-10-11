@@ -1,13 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { setupWalkerAuth } from "./fixtures/walker-auth";
 
 test.describe("Walker Campaigns Page - Mobile UX", () => {
   test.beforeEach(async ({ page }) => {
     // Set mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    // Login and navigate to campaigns page
-    await page.goto("/");
-    // This assumes you have a test user setup or mock auth
-    await page.goto("/walker/campaigns");
+    // Set up walker authentication (localStorage + mocked endpoints)
+    await setupWalkerAuth(page);
   });
 
   test("renders tabs with campaign counts", async ({ page }) => {
