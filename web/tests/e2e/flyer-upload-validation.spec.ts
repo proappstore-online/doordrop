@@ -13,7 +13,29 @@ test.describe('Flyer upload validation (Epic #32)', () => {
     created_at: 1_700_000_000_000,
   };
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
+    // Set platform session cookie before any navigation
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: FAKE_TOKEN,
+          domain: 'localhost',
+          path: '/',
+          secure: false,
+          httpOnly: false,
+        },
+      ]);
+    } catch (e) {
+      // Fallback: Set via init script if context.addCookies fails
+      await page.addInitScript(
+        ({ token }) => {
+          document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
+        },
+        { token: FAKE_TOKEN },
+      );
+    }
+
     // Mock authentication
     await page.addInitScript(
       ({ token, user }) => {

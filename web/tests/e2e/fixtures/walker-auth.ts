@@ -35,21 +35,41 @@ const FAKE_TOKEN = 'fake-session-token';
  * 4. Catch-all for any other auth-related endpoints the SDK might call
  */
 export async function setupWalkerAuth(page: Page, context: BrowserContext) {
-  // Set localStorage session and cookie (will be available when page loads)
+  // Set platform session cookie and localStorage before any navigation
+  // This ensures authentication is in place when the page loads
+
+  // Try context.addCookies first (doesn't require navigation)
+  try {
+    await context.addCookies([
+      {
+        name: '__Host-pas-session',
+        value: FAKE_TOKEN,
+        domain: 'localhost',
+        path: '/',
+        secure: false,
+        httpOnly: false,
+      },
+    ]);
+  } catch (e) {
+    // Fallback: Set via page init script if context.addCookies fails
+    await page.addInitScript(
+      ({ token }) => {
+        document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
+      },
+      { token: FAKE_TOKEN },
+    );
+  }
+
+  // Also set localStorage session for SDK hydration (platform-cookie mode)
   await page.addInitScript(
     ({ token, user }) => {
       localStorage.setItem(
         'fas:session:doordrop',
         JSON.stringify({ token, user, savedAt: Date.now() }),
       );
-      // Set the session cookie via document.cookie
-      document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
     },
     { token: FAKE_TOKEN, user: FAKE_WALKER_USER },
   );
-
-  // Register auth endpoint mocks BEFORE page navigation
-  // Any additional endpoint mocks should be registered by the test AFTER this call
 
   // Mock FAS auth endpoint - primary auth check
   await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
@@ -60,7 +80,7 @@ export async function setupWalkerAuth(page: Page, context: BrowserContext) {
     }),
   );
 
-  // Mock worker /v1/me endpoint - user profile fetch
+  // Mock worker /v1/me endpoint - user profile fetch (called after cookie auth)
   await page.route('**/.pas/worker/v1/me', (route) =>
     route.fulfill({
       status: 200,
@@ -82,7 +102,4 @@ export async function setupWalkerAuth(page: Page, context: BrowserContext) {
       route.continue();
     }
   });
-
-  // NOTE: Do NOT call page.goto() here.
-  // Tests must call page.goto() themselves after all mocks are registered.
 }
