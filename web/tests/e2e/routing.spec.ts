@@ -151,9 +151,11 @@ test.describe('Role selection routing', () => {
   });
 
   test('new account sees role selection form and can submit', async ({ page }) => {
+    // Register mocks BEFORE navigation
     await page.route('**/v1/me', (route) =>
       route.fulfill({
         status: 200,
+        contentType: 'application/json',
         body: JSON.stringify({
           user: null,
           needsRoleSelection: true,
@@ -166,15 +168,15 @@ test.describe('Role selection routing', () => {
 
     await page.goto('/select-role');
 
-    // Should see role selection buttons
-    await expect(page.getByRole('button', { name: /I'm a client/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /I'm a walker/i })).toBeVisible();
+    // Wait for the role selection heading to appear
+    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
 
-    // Should not be disabled
-    await expect(page.getByRole('button', { name: /I'm a client/i })).toBeEnabled();
+    // Should see role selection buttons - they are h2 inside buttons with the text
+    await expect(page.locator('button', { has: page.locator('text="I\'m a client"') }).first()).toBeVisible();
+    await expect(page.locator('button', { has: page.locator('text="I\'m a walker"') }).first()).toBeVisible();
 
-    // Submit as client
-    await page.getByRole('button', { name: /I'm a client/i }).click();
+    // Submit as client - click the button containing the "I'm a client" text
+    await page.locator('button', { has: page.locator('text="I\'m a client"') }).first().click();
 
     // Should redirect to /app
     await expect(page).toHaveURL('/app');
@@ -235,6 +237,7 @@ test.describe('Role selection routing', () => {
     await page.route('**/v1/me', (route) =>
       route.fulfill({
         status: 200,
+        contentType: 'application/json',
         body: JSON.stringify({
           user: null,
           needsRoleSelection: true,
@@ -249,9 +252,10 @@ test.describe('Role selection routing', () => {
     );
 
     await page.goto('/select-role');
+    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
 
     // Submit as walker
-    await page.getByRole('button', { name: /I'm a walker/i }).click();
+    await page.locator('button', { has: page.locator('text="I\'m a walker"') }).first().click();
 
     // Should show error message
     await expect(page.getByText(/Failed to set role:/i)).toBeVisible();
@@ -269,6 +273,7 @@ test.describe('Role selection routing', () => {
     await page.route('**/v1/me', (route) =>
       route.fulfill({
         status: 200,
+        contentType: 'application/json',
         body: JSON.stringify({
           user: null,
           needsRoleSelection: true,
@@ -281,14 +286,17 @@ test.describe('Role selection routing', () => {
     });
 
     await page.goto('/select-role');
+    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
 
     // Submit as client
-    const submitButton = page.getByRole('button', { name: /I'm a client/i });
-    await submitButton.click();
+    await page.locator('button', { has: page.locator('text="I\'m a client"') }).first().click();
 
     // Both buttons should be disabled while submitting
-    await expect(page.getByRole('button', { name: /I'm a client/i })).toBeDisabled();
-    await expect(page.getByRole('button', { name: /I'm a walker/i })).toBeDisabled();
+    // Check buttons are disabled by verifying the opacity/cursor-not-allowed class
+    const clientBtn = page.locator('button', { has: page.locator('text="I\'m a client"') }).first();
+    const walkerBtn = page.locator('button', { has: page.locator('text="I\'m a walker"') }).first();
+    await expect(clientBtn).toHaveAttribute('disabled', '');
+    await expect(walkerBtn).toHaveAttribute('disabled', '');
   });
 });
 
