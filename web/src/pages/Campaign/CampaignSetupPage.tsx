@@ -71,7 +71,11 @@ const CampaignSetupPage: React.FC = () => {
   const isStepValid = useCallback((): boolean => {
     switch (currentStep.id) {
       case "location":
-        return Boolean(campaignData.state && campaignData.suburb && campaignData.postcode);
+        return Boolean(
+          campaignData.state &&
+          campaignData.suburb &&
+          /^\d{4}$/.test(campaignData.postcode || "")
+        );
       case "delivery":
         return Boolean(campaignData.doorRadiusM && campaignData.doorRadiusM > 0);
       case "flyer":
@@ -232,7 +236,7 @@ const CampaignSetupPage: React.FC = () => {
           <DeliveryAreaStep data={campaignData} onChange={handleDataChange} isLoading={isPublishing} />
         )}
         {currentStep.id === "flyer" && (
-          <FlyerStep data={campaignData} onChange={handleDataChange} currentUserId={currentUser?.id} isLoading={isPublishing} />
+          <FlyerStep data={campaignData} onChange={handleDataChange} currentUserId={currentUser?.id} campaignId={campaignId} isLoading={isPublishing} />
         )}
         {currentStep.id === "schedule" && (
           <ScheduleBudgetStep data={campaignData} onChange={handleDataChange} isLoading={isPublishing} />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FlyerRepository, type FlyerWithId } from "../../../repositories/flyerRepository";
+import { PrintoutRepository } from "../../../repositories/printoutRepository";
 import { uploadFile as uploadFlyer } from "../../../utils/storageUpload";
 import type { CampaignData } from "../../../models/campaign";
 
@@ -8,12 +9,13 @@ interface FlyerStepProps {
   data: Partial<CampaignData>;
   onChange: (data: Partial<CampaignData>) => void;
   currentUserId?: string;
+  campaignId?: string;
   isLoading?: boolean;
 }
 
 type SelectionMode = "library" | "upload" | "none";
 
-const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, isLoading = false }) => {
+const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, campaignId, isLoading = false }) => {
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<SelectionMode>("none");
   const [flyers, setFlyers] = useState<FlyerWithId[]>([]);
@@ -71,15 +73,30 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, is
       return;
     }
 
+    if (!campaignId) {
+      setError("Campaign not found. Please try again.");
+      return;
+    }
+
     try {
       setError(null);
+      // Create a campaign-specific printout from the library flyer
+      const printoutId = await PrintoutRepository.createVersion(campaignId, {
+        name: flyer.name,
+        description: flyer.description,
+        fileUrl: flyer.fileUrl,
+        createdAt: new Date(),
+        createdBy: currentUserId,
+        flyerId: selectedLibraryId,
+      });
+
       onChange({
         ...data,
-        activePrintoutId: selectedLibraryId,
+        activePrintoutId: printoutId,
       });
       setMode("none");
     } catch (err) {
-      console.error("Failed to attach flyer:", err);
+      console.error("Failed to create printout from library flyer:", err);
       setError("Failed to attach flyer. Please try again.");
     }
   };
