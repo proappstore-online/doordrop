@@ -44,7 +44,6 @@ export async function setupWalkerAuth(page: Page, context: BrowserContext) {
       {
         name: '__Host-pas-session',
         value: FAKE_TOKEN,
-        domain: 'localhost',
         path: '/',
         secure: false,
         httpOnly: false,

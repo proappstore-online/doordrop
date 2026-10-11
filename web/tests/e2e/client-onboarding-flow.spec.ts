@@ -3,23 +3,32 @@ import { test, expect } from '@playwright/test';
 // First-time client flow: incomplete profile redirects to onboarding before allowing
 // access to campaigns, dashboard, setup, etc.
 test.describe('Client onboarding requirement', () => {
-  test('incomplete profile redirects /app to /app/onboarding', async ({ page, context }) => {
-    // Mock auth as authenticated (simulating a signed-in session)
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: false, // Allow access from JS for testing
-      },
-    ]);
+  test('incomplete profile redirects /app to /app/onboarding', async ({ page }) => {
+    const FAKE_USER = { id: 'client-incomplete-1', login: 'test-client', avatarUrl: null };
 
-    // Mock /v1/me with incomplete client profile
-    await page.route('**/v1/me', (route) =>
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
       route.fulfill({
         status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
+
+    // Mock FAS auth endpoint
+    await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
+
+    // Mock worker profile endpoint with incomplete client profile
+    await page.route('**/.pas/worker/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
         body: JSON.stringify({
           user: {
             id: 'client-incomplete-1',
@@ -41,11 +50,31 @@ test.describe('Client onboarding requirement', () => {
   });
 
   test('incomplete profile redirects /app/setup to /app/onboarding', async ({ page }) => {
+    const FAKE_USER = { id: 'client-incomplete-2', login: 'test-client', avatarUrl: null };
 
-    // Mock /v1/me with incomplete client profile (no onboardingCompleted)
-    await page.route('**/v1/me', (route) =>
+    // Mock SDK auth probe endpoint
+    await page.route('**/.pas/auth/me', (route) =>
       route.fulfill({
         status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
+
+    // Mock FAS auth endpoint
+    await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
+
+    // Mock worker profile endpoint with incomplete client profile (no onboardingCompleted)
+    await page.route('**/.pas/worker/v1/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
         body: JSON.stringify({
           user: {
             id: 'client-incomplete-2',

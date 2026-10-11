@@ -20,7 +20,6 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
         {
           name: '__Host-pas-session',
           value: FAKE_TOKEN,
-          domain: 'localhost',
           path: '/',
           secure: false,
           httpOnly: false,
@@ -48,6 +47,15 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
     );
 
     // Mock auth endpoints
+    // The SDK calls /.pas/auth/me first (platform cookie auth probe)
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FAKE_USER),
+      }),
+    );
+
     await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
       route.fulfill({
         status: 200,
@@ -79,6 +87,7 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
       }, 500);
     });
 
+    // Navigate after all mocks are registered for this test
     await page.goto('/app');
 
     // Check for loading state
@@ -97,6 +106,7 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
       }),
     );
 
+    // Navigate after all mocks are registered for this test
     await page.goto('/app');
 
     // Check for first-time empty state

@@ -24,18 +24,19 @@ test.describe('Route gating (unauthenticated)', () => {
 
 // Profile load errors should show recovery UI and block access to protected routes
 test.describe('Route gating (profile load errors)', () => {
-  test.beforeEach(async ({ page, context }) => {
-    // Mock authentication to succeed
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+  test.beforeEach(async ({ page }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'test-user',
+          login: 'test-user',
+          avatarUrl: null,
+        }),
+      }),
+    );
   });
 
   test('client role route shows profile error on /v1/me failure', async ({ page }) => {

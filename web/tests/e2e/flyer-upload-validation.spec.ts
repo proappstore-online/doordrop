@@ -20,7 +20,6 @@ test.describe('Flyer upload validation (Epic #32)', () => {
         {
           name: '__Host-pas-session',
           value: FAKE_TOKEN,
-          domain: 'localhost',
           path: '/',
           secure: false,
           httpOnly: false,
@@ -48,6 +47,11 @@ test.describe('Flyer upload validation (Epic #32)', () => {
     );
 
     // Mock auth endpoints
+    // The SDK calls /.pas/auth/me first (platform cookie auth probe)
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
+    );
+
     await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
     );

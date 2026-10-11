@@ -20,7 +20,6 @@ test.describe('Flyer library unification (Issue #21)', () => {
         {
           name: '__Host-pas-session',
           value: FAKE_TOKEN,
-          domain: 'localhost',
           path: '/',
           secure: false,
           httpOnly: false,
@@ -44,6 +43,11 @@ test.describe('Flyer library unification (Issue #21)', () => {
         );
       },
       { token: FAKE_TOKEN, user: FAKE_USER },
+    );
+
+    // The SDK calls /.pas/auth/me first (platform cookie auth probe)
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
     );
 
     await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
