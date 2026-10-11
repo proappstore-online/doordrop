@@ -224,11 +224,29 @@ jobs:
         run: |
           node -e '
             const fs=require("fs");
-            let r={}; try{ r=JSON.parse(fs.readFileSync("test-results/results.json","utf8")); }catch{}
-            const s=r.stats||{}, specs=[];
+
+            // Fail-closed: missing, malformed, or zero-test runs are errors
+            let resultsPath="test-results/results.json";
+            if(!fs.existsSync(resultsPath)){ console.error("FAIL: "+resultsPath+" not found"); process.exit(1); }
+
+            let r;
+            try{ r=JSON.parse(fs.readFileSync(resultsPath,"utf8")); }
+            catch(e){ console.error("FAIL: "+resultsPath+" is not valid JSON: "+e.message); process.exit(1); }
+
+            if(!r || typeof r!=="object"){ console.error("FAIL: "+resultsPath+" root is not an object"); process.exit(1); }
+            if(!r.stats){ console.error("FAIL: "+resultsPath+" missing stats"); process.exit(1); }
+
+            const s=r.stats;
+            const totalTests=(s.expected||0)+(s.unexpected||0)+(s.flaky||0);
+            if(totalTests===0){ console.error("FAIL: no tests executed (expected, unexpected, and flaky are all 0)"); process.exit(1); }
+
+            const specs=[];
             const walk=(su=[])=>su.forEach(x=>{ (x.specs||[]).forEach(sp=>specs.push({title:[x.title,sp.title].filter(Boolean).join(" > "),ok:sp.ok!==false})); walk(x.suites||[]); });
             walk(r.suites||[]);
-            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:s.expected||0, failed:s.unexpected||0, flaky:s.flaky||0, skipped:s.skipped||0, ok:(s.unexpected||0)===0, specs }));
+
+            const ok=(s.unexpected||0)===0 && totalTests>0;
+            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:s.expected||0, failed:s.unexpected||0, flaky:s.flaky||0, skipped:s.skipped||0, ok, specs }));
+            console.log("Processed results: "+(s.expected||0)+" passed, "+(s.unexpected||0)+" failed, "+(s.flaky||0)+" flaky, "+(s.skipped||0)+" skipped");
           '
           # Keyless (#57): mint an OIDC token bound to this repo instead of the
           # shared INTERNAL_TOKEN. kb-host derives the app prefix from the
