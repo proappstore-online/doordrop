@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { pushWalkerInterested } from "../../services/pushNotifications";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { CampaignRepository } from "../../repositories/campaignRepository";
@@ -17,6 +18,8 @@ interface CampaignWithInterest extends CampaignData {
 
 const WalkerCampaignsPage: React.FC = () => {
   const { currentUser } = useAuthContext();
+  const location = useLocation();
+  const roleMismatch = !!(location.state as { roleMismatch?: boolean } | null)?.roleMismatch;
   const [activeTab, setActiveTab] = useState<Tab>("available");
   const [campaigns, setCampaigns] = useState<CampaignWithInterest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,6 +183,13 @@ const WalkerCampaignsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
+      {roleMismatch && (
+        <div role="alert" aria-live="assertive" className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/60 p-4">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            That link is for a different role — taking you to your home screen.
+          </p>
+        </div>
+      )}
       <MobilePageHeader
         title="Job Discovery"
         subtitle="Find work that matches your availability"

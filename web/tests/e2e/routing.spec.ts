@@ -478,7 +478,7 @@ test.describe('Deep link restoration after sign-in', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'user2', role: 'walker', name: 'Test Walker' },
+          user: { id: 'user2', role: 'walker', name: 'Test Walker', walker_profile: { onboarding_completed: true } },
           needsRoleSelection: false,
         }),
       }),
@@ -519,6 +519,9 @@ test.describe('Deep link restoration after sign-in', () => {
 
     // Should redirect to client home
     await expect(page).toHaveURL('/app');
+
+    // Should show the role mismatch message
+    await expect(page.getByText(/That link is for a different role/i)).toBeVisible();
 
     // Assert stable content to prove guard settled correctly
     await expect(page.getByRole('heading', { name: 'Campaigns' })).toBeVisible();

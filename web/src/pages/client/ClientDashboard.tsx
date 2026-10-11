@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { useClientProfileCompletion } from "../../hooks/useClientProfileCompletion";
 import { CampaignRepository } from "../../repositories/campaignRepository";
@@ -142,6 +142,8 @@ function PortfolioSectionView({
 
 export default function ClientDashboard() {
   const { currentUser } = useAuthContext();
+  const location = useLocation();
+  const roleMismatch = !!(location.state as { roleMismatch?: boolean } | null)?.roleMismatch;
   const { needsOnboarding } = useClientProfileCompletion();
   const [campaigns, setCampaigns] = useState<CampaignWithId[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +198,13 @@ export default function ClientDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-2 py-3 sm:px-4">
+      {roleMismatch && (
+        <div role="alert" aria-live="assertive" className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            That link is for a different role — taking you to your home screen.
+          </p>
+        </div>
+      )}
       {needsOnboarding && (
         <section
           role="status"

@@ -51,7 +51,7 @@ export default function PrivateRoute({ allowedRoles }: Props) {
     // userData.role === 'admin' implicitly passes any allowedRoles check (admins see all routes).
     if (!allowedRoles.includes(userData.role) && userData.role !== 'admin') {
       const target = userData.role === 'walker' ? '/walker' : '/app';
-      if (location.pathname !== target) return <Navigate to={target} replace />;
+      if (location.pathname !== target) return <Navigate to={target} replace state={{ roleMismatch: true }} />;
     }
   }
 
