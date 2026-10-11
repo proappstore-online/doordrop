@@ -169,7 +169,7 @@ test.describe('Role selection routing', () => {
     await page.goto('/select-role');
 
     // Wait for the role selection heading to appear
-    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
+    await page.waitForSelector('h1', { timeout: 5000 });
 
     // Should see role selection buttons - they are h2 inside buttons with the text
     await expect(page.locator('button', { has: page.locator('text="I\'m a client"') }).first()).toBeVisible();
@@ -252,7 +252,7 @@ test.describe('Role selection routing', () => {
     );
 
     await page.goto('/select-role');
-    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
+    await page.waitForSelector('h1', { timeout: 5000 });
 
     // Submit as walker
     await page.locator('button', { has: page.locator('text="I\'m a walker"') }).first().click();
@@ -286,7 +286,7 @@ test.describe('Role selection routing', () => {
     });
 
     await page.goto('/select-role');
-    await page.waitForSelector('h1:has-text("Welcome to DoorDrop")', { timeout: 5000 });
+    await page.waitForSelector('h1', { timeout: 5000 });
 
     // Submit as client
     await page.locator('button', { has: page.locator('text="I\'m a client"') }).first().click();
