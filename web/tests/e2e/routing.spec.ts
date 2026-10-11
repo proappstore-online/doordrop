@@ -113,17 +113,22 @@ test.describe('Route gating (profile load errors)', () => {
 // Role selection routing: new accounts see the form, existing accounts are redirected away
 test.describe('Role selection routing', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Mock authentication to succeed
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute, use url instead)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      // Fallback for edge cases
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
   });
 
   test('new account sees role selection form and can submit', async ({ page }) => {
@@ -272,16 +277,21 @@ test.describe('Role selection routing', () => {
 test.describe('Deep link restoration after sign-in', () => {
   test.beforeEach(async ({ page, context }) => {
     // Mock authentication to succeed after sign-in
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
   });
 
   test('client deep link restored after sign-in', async ({ page }) => {
@@ -497,16 +507,21 @@ test.describe('Deep link restoration after sign-in', () => {
 test.describe('Delivery tracking fault tolerance', () => {
   test.beforeEach(async ({ page, context }) => {
     // Mock authentication for walker
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
   });
 
   test('session creation failure blocks tracking start (prevent orphan sessions)', async ({
@@ -715,16 +730,21 @@ test.describe('Delivery tracking fault tolerance', () => {
 // Campaign assignment lifecycle: atomic status transitions and explicit field clearing
 test.describe('Campaign assignment lifecycle', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
   });
 
   test('assign walker: sets status to assigned and updates assignedWalkerId', async ({ page }) => {
@@ -863,16 +883,21 @@ test.describe('Campaign assignment lifecycle', () => {
 // Campaign creation: validate inputs, handle geocoding, and show actionable errors
 test.describe('Campaign creation', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
 
     // Mock auth as client
     await page.route('**/v1/me', (route) =>
@@ -1182,16 +1207,21 @@ test.describe('Campaign creation', () => {
 // Flyer library: loading, saving, updating, deleting with error handling
 test.describe('Flyer library error handling', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
 
     await page.route('**/v1/me', (route) =>
       route.fulfill({
@@ -1420,16 +1450,21 @@ test.describe('Flyer library error handling', () => {
 // Campaign flyer selection: draft campaigns allow changing/clearing active flyer
 test.describe('Campaign active flyer management', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
 
     // Mock auth as client
     await page.route('**/v1/me', (route) =>
@@ -1658,16 +1693,21 @@ test.describe('Campaign active flyer management', () => {
 // Automatic flyer activation: creating the first flyer should make it active
 test.describe('Campaign flyer automatic activation on creation', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addCookies([
-      {
-        name: '__Host-pas-session',
-        value: 'mock-session-token',
-        domain: 'localhost',
-        path: '/',
-        secure: false,
-        httpOnly: true,
-      },
-    ]);
+    // Set __Host cookie with valid format (no domain attribute)
+    try {
+      await context.addCookies([
+        {
+          name: '__Host-pas-session',
+          value: 'mock-session-token',
+          url: 'http://localhost:5173/',
+          httpOnly: true,
+        },
+      ]);
+    } catch {
+      await page.addInitScript(() => {
+        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
+      });
+    }
 
     // Mock auth as client
     await page.route('**/v1/me', (route) =>
