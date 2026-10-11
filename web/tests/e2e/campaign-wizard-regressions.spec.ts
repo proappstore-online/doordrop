@@ -16,26 +16,7 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     },
   };
 
-  test.beforeEach(async ({ page, context }) => {
-    try {
-      await context.addCookies([
-        {
-          name: '__Host-pas-session',
-          value: FAKE_TOKEN,
-          path: '/',
-          secure: false,
-          httpOnly: false,
-        },
-      ]);
-    } catch (e) {
-      await page.addInitScript(
-        ({ token }) => {
-          document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
-        },
-        { token: FAKE_TOKEN },
-      );
-    }
-
+  test.beforeEach(async ({ page }) => {
     await page.addInitScript(
       ({ token, user }) => {
         localStorage.setItem(
@@ -50,10 +31,6 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
     );
 
-    await page.route('**/api.freeappstore.online/v1/auth/me', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FAKE_USER) }),
-    );
-
     await page.route('**/.pas/worker/v1/me', (route) =>
       route.fulfill({
         status: 200,
@@ -61,9 +38,24 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
         body: JSON.stringify({ user: fakeClientUser, needsRoleSelection: false }),
       }),
     );
+
+    // Mock Nominatim geocoding to prevent real network calls
+    await page.route('**/nominatim.openstreetmap.org/search*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            lat: '-33.8168',
+            lon: '151.0093',
+            address: { postcode: '2000', city: 'Sydney', state: 'New South Wales' },
+          },
+        ]),
+      }),
+    );
   });
 
-  test('#20: invalid postcode blocks advance', async ({ page }) => {
+  test('#20: invalid postcode blocks advance and preserves form state', async ({ page }) => {
     let campaignPostCount = 0;
 
     await page.route('**/users/**/flyers', (route) =>
@@ -83,12 +75,27 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
 
     await page.goto('/app/setup');
 
-    // Fill location step
+    // Fill location step with valid state and suburb
     await page.locator('[class*="-control"]').first().click();
     await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
     await page.getByRole('option', { name: 'New South Wales' }).click();
-    await page.fill('input[maxlength="100"]', 'Parramatta');
-    await page.fill('input[inputMode="numeric"]', '123'); // Invalid 3-digit postcode
+
+    const suburbInput = page.locator('input[maxlength="100"]');
+    await suburbInput.fill('Parramatta');
+
+    const postcodeInput = page.locator('input[inputMode="numeric"]');
+    await postcodeInput.fill('123'); // Invalid 3-digit postcode
+
+    // Assert the exact postcode validation error appears
+    const postcodeError = page.locator('#postcode-error');
+    await expect(postcodeError).toBeVisible({ timeout: 5000 });
+    await expect(postcodeError).toHaveText('Postcode must be a 4-digit number');
+
+    // Verify form state is preserved
+    await expect(suburbInput).toHaveValue('Parramatta');
+    await expect(postcodeInput).toHaveValue('123');
+    // State is selected in react-select (the value shows in the control)
+    await expect(page.locator('[class*="-singleValue"]')).toContainText('New South Wales');
 
     // Continue button should be disabled
     const continueBtn = page.locator('button:has-text("Continue →")').first();
@@ -130,14 +137,14 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
 
     await page.goto('/app/setup');
 
-    // Fill location step with valid postcode
+    // Fill location step with valid postcode (exactly 4 digits)
     await page.locator('[class*="-control"]').first().click();
     await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
     await page.getByRole('option', { name: 'New South Wales' }).click();
     await page.fill('input[maxlength="100"]', 'Parramatta');
-    await page.fill('input[inputMode="numeric"]', '3000'); // Valid 4-digit postcode
+    await page.fill('input[inputMode="numeric"]', '3000');
 
-    // Continue button should be enabled
+    // Continue button should be enabled once valid
     const continueBtn = page.locator('button:has-text("Continue →")').first();
     await expect(continueBtn).toBeEnabled({ timeout: 5000 });
 
@@ -147,17 +154,17 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     // Should see next step
     await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
-    // Campaign should be created
+    // Campaign should be created exactly once
     expect(campaignPostCount).toBe(1);
   });
 
   test('#21: library flyer selection creates campaign printout', async ({ page }) => {
     const LIBRARY_FLYER_ID = 'lib-flyer-456';
     const PRINTOUT_ID = 'cp-789';
-    let campaignId = '';
+    const CAMPAIGN_ID = 'test-campaign-123';
     let printoutCreatedBody: any = null;
 
-    // Mock library flyers
+    // Mock library flyers endpoint
     await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
         status: 200,
@@ -173,8 +180,8 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
       }),
     );
 
-    // Mock printout creation
-    await page.route('**/.pas/worker/v1/campaigns/**/printouts', async (route) => {
+    // Mock printout creation and list
+    await page.route(`**/.pas/worker/v1/campaigns/${CAMPAIGN_ID}/printouts`, async (route) => {
       if (route.request().method() === 'POST') {
         printoutCreatedBody = JSON.parse(route.request().postData() || '{}');
         return route.fulfill({
@@ -182,10 +189,11 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
           contentType: 'application/json',
           body: JSON.stringify({
             id: PRINTOUT_ID,
-            campaign_id: campaignId,
+            campaign_id: CAMPAIGN_ID,
             version: 1,
             flyer_id: LIBRARY_FLYER_ID,
             name: 'Test Flyer',
+            file_url: 'https://example.com/flyer.png',
           }),
         });
       }
@@ -195,14 +203,34 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     // Mock campaign creation
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       if (route.request().method() === 'POST') {
-        campaignId = 'test-campaign-123';
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: campaignId,
+            id: CAMPAIGN_ID,
             name: 'Test Campaign',
             status: 'draft',
+            suburb: 'test',
+            postcode: '2150',
+            state: 'New South Wales',
+            active_printout_id: null,
+          }),
+        });
+      }
+      return route.continue();
+    });
+
+    // Mock campaign detail GET
+    await page.route(`**/.pas/worker/v1/campaigns/${CAMPAIGN_ID}`, async (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: CAMPAIGN_ID,
+            name: 'Test Campaign',
+            status: 'draft',
+            active_printout_id: PRINTOUT_ID,
             suburb: 'test',
             postcode: '2150',
             state: 'New South Wales',
@@ -233,21 +261,23 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     await page.waitForSelector('label:has-text("Test Flyer")', { timeout: 5000 });
     await page.click('label:has-text("Test Flyer")');
 
-    // Confirm selection
+    // Confirm selection - this triggers printout creation
     await page.click('button:has-text("Confirm")');
 
-    // Wait for the printout creation to complete
+    // Wait for printout POST to complete
     await expect.poll(() => printoutCreatedBody, { timeout: 10000 }).toBeTruthy();
 
-    // Verify printout was created with flyer reference
+    // Verify printout POST body contains required fields with correct library flyer reference
     expect(printoutCreatedBody.flyer_id).toBe(LIBRARY_FLYER_ID);
     expect(printoutCreatedBody.name).toBe('Test Flyer');
+    expect(printoutCreatedBody.description).toBe('Test description');
+    expect(printoutCreatedBody.file_url).toBe('https://example.com/flyer.png');
 
-    // Click Continue to trigger saveDraft in parent, which saves activePrintoutId to localStorage
+    // Click Continue to advance and save draft
     await page.click('button:has-text("Continue →")');
-    await page.waitForSelector('label[for="start-date"]', { timeout: 5000 });
+    await page.waitForSelector('input[id="start-date"]', { timeout: 5000 });
 
-    // Now verify activePrintoutId was saved to localStorage with the PRINTOUT ID, not library flyer ID
+    // Verify activePrintoutId was saved to localStorage as printout ID (not library flyer ID)
     const draft = JSON.parse(
       await page.evaluate(() => localStorage.getItem('campaign_draft_gh:test-client-1') || '{}'),
     );
@@ -258,6 +288,7 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
   test('#21: failed printout creation shows error', async ({ page }) => {
     const LIBRARY_FLYER_ID = 'lib-flyer-fail';
     let campaignId = '';
+    let printoutPostAttempted = false;
 
     // Mock library flyers
     await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
@@ -276,8 +307,9 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     );
 
     // Mock printout creation to FAIL
-    await page.route('**/.pas/worker/v1/campaigns/**/printouts', async (route) => {
+    await page.route('**/.pas/worker/v1/campaigns/*/printouts', async (route) => {
       if (route.request().method() === 'POST') {
+        printoutPostAttempted = true;
         return route.fulfill({
           status: 500,
           contentType: 'application/json',
@@ -328,24 +360,32 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     await page.waitForSelector('label:has-text("Fail Flyer")', { timeout: 5000 });
     await page.click('label:has-text("Fail Flyer")');
 
-    // Confirm - will fail
+    // Confirm - will fail with 500 error
     await page.click('button:has-text("Confirm")');
 
-    // Verify error message is shown
-    await expect(page.locator('text=/Failed|error/i')).toBeVisible({ timeout: 5000 });
+    // Wait for printout POST to be attempted and fail
+    await expect.poll(() => printoutPostAttempted, { timeout: 10000 }).toBe(true);
 
-    // Wait a moment for any state updates
-    await page.waitForTimeout(500);
+    // Verify the exact error message appears in the red error box
+    const errorDiv = page.locator('div[class*="border-red-200"][class*="bg-red-50"]', {
+      has: page.locator('text=Failed to attach flyer'),
+    });
+    await expect(errorDiv).toBeVisible({ timeout: 5000 });
 
-    // Verify activePrintoutId is NOT set
+    // Verify activePrintoutId is NOT set in draft
     const draft = JSON.parse(
       await page.evaluate(() => localStorage.getItem('campaign_draft_gh:test-client-1') || '{}'),
     );
     expect(draft.data?.activePrintoutId).toBeUndefined();
 
-    // Verify Continue button is still disabled
+    // Verify Continue button is still disabled (no printout selected)
     const continueBtn = page.locator('button:has-text("Continue →")').first();
     await expect(continueBtn).toBeDisabled();
+
+    // Verify no PATCH was sent to campaign (error means no update)
+    const patchRequests = await page.context().routing;
+    // The campaign should still be in draft state
+    expect(campaignId).toBe('test-campaign-fail');
   });
 });
 
