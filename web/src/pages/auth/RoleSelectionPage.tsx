@@ -7,13 +7,13 @@ import { useUserData } from '../../hooks/useUserData';
 export default function RoleSelectionPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthContext();
-  const { needsRoleSelection, refetch } = useUserData();
+  const { needsRoleSelection, loading, refetch } = useUserData();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If the user doesn't need role selection (already has one), redirect them
+  // If the profile has loaded and user doesn't need role selection, redirect them
   // This shouldn't happen in normal flow due to PrivateRoute guard, but defensive check
-  if (needsRoleSelection === false) {
+  if (!loading && needsRoleSelection === false) {
     // User is enrolled; PrivateRoute should have redirected them, but redirect here as fallback
     setTimeout(() => navigate('/app', { replace: true }), 0);
     return null;

@@ -37,7 +37,12 @@ export default function PrivateRoute({ allowedRoles }: Props) {
 
   // Fail-closed: role-gated routes stay blocked until userData loads successfully
   // Unprotected routes (no allowedRoles) wait for userData to load before rendering
+  // Exception: /select-role allows rendering when needsRoleSelection=true (no userData yet)
   if (!userData) {
+    if (needsRoleSelection) {
+      // Authenticated user needing role selection — allow /select-role to render
+      return <Outlet />;
+    }
     return <LoadingScreen />;
   }
 

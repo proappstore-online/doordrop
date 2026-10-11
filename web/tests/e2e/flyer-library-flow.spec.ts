@@ -65,7 +65,10 @@ test.describe('Flyer library unification (Issue #21)', () => {
     );
   });
 
-  test('Create campaign without flyers shows no prompt and navigates directly', async ({ page }) => {
+  test('Create campaign without flyers shows disabled flyer button and stops at flyer step', async ({ page }) => {
+    let campaignCreated = false;
+    let campaignId = '';
+
     // Mock flyer endpoint with EMPTY flyer list (no flyers available)
     await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
@@ -75,15 +78,20 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    // Mock campaign creation and fetch
-    await page.route('**/campaigns', async (route) => {
+    // Mock campaign creation - should be called ONCE after Location step completes
+    await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       const method = route.request().method();
       if (method === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        // Verify no activePrintoutId is sent
+        expect(body.active_printout_id).toBeUndefined();
+        campaignCreated = true;
+        campaignId = 'campaign-no-flyers-' + Date.now();
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'campaign-no-flyers',
+            id: campaignId,
             name: 'Parramatta Campaign',
             status: 'draft',
             suburb: 'parramatta',
@@ -91,6 +99,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
             state: 'New South Wales',
             admin_ids: ['gh:test-client-1'],
             created_at: 1_700_000_000_000,
+            active_printout_id: null,
             member_ids: ['gh:test-client-1'],
           }),
         });
@@ -98,31 +107,8 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
-    // Mock campaign detail fetch
-    await page.route('**/campaigns/campaign-no-flyers', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'campaign-no-flyers',
-          name: 'Parramatta Campaign',
-          status: 'published',
-          suburb: 'parramatta',
-          postcode: '2150',
-          state: 'New South Wales',
-          admin_ids: ['gh:test-client-1'],
-          created_at: 1_700_000_000_000,
-          active_printout_id: null,
-          member_ids: ['gh:test-client-1'],
-          doorRadiusM: 5000,
-          dueDate: 1_700_000_000_000 + 86400000 * 7,
-          budget: 500,
-        }),
-      }),
-    );
-
-    // Mock printouts endpoint (empty, no printout created when skipping flyer)
-    await page.route('**/printouts', (route) =>
+    // Mock printouts endpoint (empty, no printouts without a selected flyer)
+    await page.route('**/.pas/worker/v1/campaigns/*/printouts', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -144,47 +130,26 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
-    // Step 2: Delivery Area
+    // Step 2: Delivery Area - set radius
     await page.fill('input[placeholder="e.g., 5"]', '5');
 
     // Continue to Flyer step
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - no flyers available, should show empty state with skip option
-    // With empty flyer list, the step should show "no flyers" message and skip button
-    const skipBtn = page.locator('button').filter({ hasText: /skip|continue|without/i }).first();
-    await skipBtn.waitFor({ state: 'visible', timeout: 5000 });
+    // Step 3: Flyer - verify empty library state
+    // Empty library should be shown
+    await expect(page.getByText(/no flyer|empty|library/i)).toBeVisible({ timeout: 5000 });
 
-    // Continue without selecting (skip flyer selection)
-    await skipBtn.click();
-    await page.waitForSelector('label[for="start-date"]', { timeout: 5000 });
+    // Continue button on Flyer step should be DISABLED (no activePrintoutId)
+    const continueBtn = page.locator('button:has-text("Continue →")').first();
+    await expect(continueBtn).toBeDisabled({ timeout: 5000 });
 
-    // Step 4: Schedule & Budget
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    // Verify campaign was created with draft status and NO activePrintoutId
+    expect(campaignCreated).toBe(true);
 
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekStr = nextWeek.toISOString().split('T')[0];
-
-    await page.fill('input[id="start-date"]', tomorrowStr);
-    await page.fill('input[id="end-date"]', nextWeekStr);
-    await page.fill('input[id="budget"]', '500');
-
-    // Continue to Review
-    await page.click('button:has-text("Continue →")');
-    await page.waitForSelector('h2:has-text("Campaign Summary")', { timeout: 5000 });
-
-    // Step 5: Review - publish
-    await page.click('button:has-text("Publish")');
-
-    // Should navigate to campaign detail
-    await expect(page).toHaveURL('/app/campaign/campaign-no-flyers', { timeout: 10_000 });
-
-    // Verify we're on campaign detail page with empty state
-    await expect(page.getByText('No flyer selected').first()).toBeVisible({ timeout: 5_000 });
+    // STOP HERE - do not navigate to Schedule/Budget or publish
+    // This proves the wizard contract: flyer is required to advance beyond the Flyer step
   });
 
   test('Create campaign with library flyers shows selection prompt', async ({ page }) => {

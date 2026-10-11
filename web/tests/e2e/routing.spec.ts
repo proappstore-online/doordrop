@@ -151,20 +151,35 @@ test.describe('Role selection routing', () => {
   });
 
   test('new account sees role selection form and can submit', async ({ page }) => {
+    let roleAssigned = false;
+
     // Register mocks BEFORE navigation
-    await page.route('**/v1/me', (route) =>
-      route.fulfill({
+    // First call returns needsRoleSelection: true, after role is assigned return a client profile
+    await page.route('**/v1/me', (route) => {
+      if (roleAssigned) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            user: { id: 'user1', role: 'client', name: 'Test Client' },
+            needsRoleSelection: false,
+          }),
+        });
+      }
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           user: null,
           needsRoleSelection: true,
         }),
-      }),
-    );
-    await page.route('**/v1/me/role', (route) =>
-      route.fulfill({ status: 200, body: '{"ok":true}' }),
-    );
+      });
+    });
+
+    await page.route('**/v1/me/role', (route) => {
+      roleAssigned = true;
+      return route.fulfill({ status: 200, body: '{"ok":true}' });
+    });
 
     await page.goto('/select-role');
 
@@ -915,6 +930,19 @@ test.describe('Campaign assignment lifecycle', () => {
 // Campaign creation: validate inputs, handle geocoding, and show actionable errors
 test.describe('Campaign creation', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'client-create-test',
+          login: 'test-client',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
     // Set __Host cookie with valid format (no domain attribute)
     try {
       await context.addCookies([
@@ -1239,6 +1267,19 @@ test.describe('Campaign creation', () => {
 // Flyer library: loading, saving, updating, deleting with error handling
 test.describe('Flyer library error handling', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'flyer-user-123',
+          login: 'test-client',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
     // Set __Host cookie with valid format (no domain attribute)
     try {
       await context.addCookies([
@@ -1482,6 +1523,19 @@ test.describe('Flyer library error handling', () => {
 // Campaign flyer selection: draft campaigns allow changing/clearing active flyer
 test.describe('Campaign active flyer management', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'client-flyer-test',
+          login: 'test-client',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
     // Set __Host cookie with valid format (no domain attribute)
     try {
       await context.addCookies([
@@ -1725,6 +1779,19 @@ test.describe('Campaign active flyer management', () => {
 // Automatic flyer activation: creating the first flyer should make it active
 test.describe('Campaign flyer automatic activation on creation', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Mock SDK auth probe endpoint to establish authenticated state
+    await page.route('**/.pas/auth/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'client-auto-flyer-test',
+          login: 'test-client',
+          avatarUrl: null,
+        }),
+      }),
+    );
+
     // Set __Host cookie with valid format (no domain attribute)
     try {
       await context.addCookies([
