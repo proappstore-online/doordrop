@@ -961,7 +961,7 @@ test.describe('Campaign assignment lifecycle', () => {
 
 // Campaign creation: validate inputs, handle geocoding, and show actionable errors
 test.describe('Campaign creation', () => {
-  test.beforeEach(async ({ page, context }) => {
+  test.beforeEach(async ({ page }) => {
     // Mock SDK auth probe endpoint to establish authenticated state
     await page.route('**/.pas/auth/me', (route) =>
       route.fulfill({
@@ -975,28 +975,17 @@ test.describe('Campaign creation', () => {
       }),
     );
 
-    // Set __Host cookie with valid format (no domain attribute)
-    try {
-      await context.addCookies([
-        {
-          name: '__Host-pas-session',
-          value: 'mock-session-token',
-          url: 'http://localhost:5173/',
-          httpOnly: true,
-        },
-      ]);
-    } catch {
-      await page.addInitScript(() => {
-        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
-      });
-    }
-
     // Mock auth as client
     await page.route('**/v1/me', (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'client-create-test', role: 'client', name: 'Test Client' },
+          user: {
+            id: 'client-create-test',
+            role: 'client',
+            name: 'Test Client',
+            clientProfile: { onboardingCompleted: true },
+          },
           needsRoleSelection: false,
         }),
       }),
@@ -1078,20 +1067,26 @@ test.describe('Campaign creation', () => {
   });
 
   test('invalid postcode shows validation error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=Queensland');
+    let campaignPostCount = 0;
+    await page.route('**/v1/campaigns', (route) => {
+      if (route.request().method() === 'POST') campaignPostCount++;
+      return route.fallthrough();
+    });
 
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Brisbane');
+    await page.goto('/app/setup');
+    await expect(page.getByRole('heading', { name: 'Create a Campaign' })).toBeVisible();
 
-    // Enter invalid postcode (not 4 digits)
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', 'ABC');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Queensland' }).click();
+    await page.fill('#suburb', 'Brisbane');
+    await page.fill('#postcode', '123');
 
-    // Submit
-    await page.click('button:has-text("Create Campaign")');
-
-    // Verify postcode error is shown
-    await expect(page.getByText('Postcode must be a 4-digit number')).toBeVisible();
-    await expect(page).toHaveURL('/app/setup');
+    await expect(page.locator('#postcode-error')).toHaveText('Postcode must be a 4-digit number');
+    await expect(page.locator('#suburb')).toHaveValue('Brisbane');
+    await expect(page.locator('#postcode')).toHaveValue('123');
+    await expect(page.locator('[class*="-singleValue"]')).toContainText('Queensland');
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
+    expect(campaignPostCount).toBe(0);
   });
 
   test('form state is preserved on validation error', async ({ page }) => {
@@ -1298,7 +1293,7 @@ test.describe('Campaign creation', () => {
 
 // Flyer library: loading, saving, updating, deleting with error handling
 test.describe('Flyer library error handling', () => {
-  test.beforeEach(async ({ page, context }) => {
+  test.beforeEach(async ({ page }) => {
     // Mock SDK auth probe endpoint to establish authenticated state
     await page.route('**/.pas/auth/me', (route) =>
       route.fulfill({
@@ -1312,27 +1307,16 @@ test.describe('Flyer library error handling', () => {
       }),
     );
 
-    // Set __Host cookie with valid format (no domain attribute)
-    try {
-      await context.addCookies([
-        {
-          name: '__Host-pas-session',
-          value: 'mock-session-token',
-          url: 'http://localhost:5173/',
-          httpOnly: true,
-        },
-      ]);
-    } catch {
-      await page.addInitScript(() => {
-        document.cookie = '__Host-pas-session=mock-session-token; Path=/; SameSite=Lax';
-      });
-    }
-
     await page.route('**/v1/me', (route) =>
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'flyer-user-123', role: 'client', name: 'Test Client' },
+          user: {
+            id: 'flyer-user-123',
+            role: 'client',
+            name: 'Test Client',
+            clientProfile: { onboardingCompleted: true },
+          },
           needsRoleSelection: false,
         }),
       }),
@@ -1340,59 +1324,53 @@ test.describe('Flyer library error handling', () => {
   });
 
   test('failed flyer list load shows error, not empty state', async ({ page }) => {
-    // Mock flyer list failure
-    await page.route('**/v1/flyers', (route) =>
-      route.fulfill({
+    let flyerListRequests = 0;
+    await page.route('**/v1/users/flyer-user-123/flyers', (route) => {
+      flyerListRequests++;
+      return route.fulfill({
         status: 500,
         body: '{"error":"server error"}',
-      }),
-    );
-
-    await page.goto('/app/flyers');
-
-    // Wait for loading to finish
-    await page.waitForLoadState('networkidle');
-
-    // Verify error is shown instead of "No flyers yet"
-    await expect(page.getByText('Unable to load flyers')).toBeVisible();
-    await expect(page.getByText(/couldn\'t load your flyers/i)).toBeVisible();
-    await expect(page.getByText(/no flyers yet/i)).not.toBeVisible();
-
-    // Verify retry button is available
-    await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
-  });
-
-  test('retry button on flyer load failure', async ({ page }) => {
-    let retryCount = 0;
-
-    // First request fails, second succeeds
-    await page.route('**/v1/flyers', (route) => {
-      retryCount++;
-      if (retryCount === 1) {
-        return route.fulfill({
-          status: 500,
-          body: '{"error":"server error"}',
-        });
-      }
-      return route.fulfill({
-        status: 200,
-        body: JSON.stringify([{ id: 'flyer1', name: 'Test Flyer', createdAt: Date.now() }]),
       });
     });
 
     await page.goto('/app/flyers');
-    await page.waitForLoadState('networkidle');
 
-    // Error is shown
+    await expect(page.getByText('Unable to load flyers')).toBeVisible();
+    await expect(page.getByText('We couldn’t load your flyers. Check your connection and try again.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(page.getByText('Build your flyer library')).toHaveCount(0);
+    expect(flyerListRequests).toBeGreaterThan(0);
+  });
+
+  test('retry button on flyer load failure', async ({ page }) => {
+    let failing = true;
+    let flyerListRequests = 0;
+
+    await page.route('**/v1/users/flyer-user-123/flyers', (route) => {
+      flyerListRequests++;
+      if (failing) {
+        return route.fulfill({ status: 500, body: '{"error":"server error"}' });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 'flyer1', name: 'Test Flyer', created_at: Date.now() }]),
+      });
+    });
+    await page.route('**/v1/users/flyer-user-123/flyers/flyer1/campaigns', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+    );
+
+    await page.goto('/app/flyers');
     await expect(page.getByText('Unable to load flyers')).toBeVisible();
 
-    // Click retry
-    await page.click('button:has-text("Try again")');
-    await page.waitForLoadState('networkidle');
+    const requestsBeforeRetry = flyerListRequests;
+    failing = false;
+    await page.getByRole('button', { name: 'Try again' }).click();
 
-    // Error should be gone, flyer should load
-    await expect(page.getByText('Unable to load flyers')).not.toBeVisible();
+    await expect(page.getByText('Unable to load flyers')).toHaveCount(0);
     await expect(page.getByText('Test Flyer')).toBeVisible();
+    expect(flyerListRequests).toBeGreaterThan(requestsBeforeRetry);
   });
 
   test('flyer upload failure preserves form state', async ({ page }) => {
