@@ -231,7 +231,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
     ];
 
     // Mock flyer endpoint
-    await page.route('**/v1/users/**/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -255,26 +255,24 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.waitForSelector('label:has-text("State")');
 
     // Step 1: Location - select NSW, Parramatta, 2150
-    const stateControl = page.locator('[class*="-control"]').first();
-    await stateControl.click();
-    await page.keyboard.type('NSW');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await page.locator('[class*="-control"]').first().click();
+    await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
 
     // Continue to Step 2
-    await page.click('button:has-text("Continue")');
-    await page.waitForSelector('label:has-text("Radius")');
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
     // Step 2: Delivery - set radius
-    await page.fill('input[placeholder*="radius"]', '50');
-    await page.click('button:has-text("Continue")');
-    await page.waitForTimeout(300);
+    await page.fill('input[placeholder="e.g., 5"]', '50');
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
     // Step 3: Flyer - verify selection prompt appears
-    await expect(page.getByText(/Select|flyer|library/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('legend').filter({ hasText: 'Flyer selection' })).toBeVisible();
     await expect(page.getByText('Summer Sale Flyer')).toBeVisible();
     await expect(page.getByText('Winter Promo')).toBeVisible();
   });
@@ -466,7 +464,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
 
   test('Skip flyer selection navigates to campaign without setting active flyer', async ({ page }) => {
     // Mock flyer endpoint with one flyer
-    await page.route('**/v1/users/**/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -499,28 +497,28 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.waitForSelector('label:has-text("State")');
 
     // Step 1: Location
-    const stateControl = page.locator('[class*="-control"]').first();
-    await stateControl.click();
-    await page.keyboard.type('NSW');
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
+    await page.locator('[class*="-control"]').first().click();
+    await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
 
     // Continue to Step 2
-    await page.click('button:has-text("Continue")');
-    await page.waitForSelector('label:has-text("Radius")');
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
     // Step 2: Delivery
-    await page.fill('input[placeholder*="radius"]', '50');
-    await page.click('button:has-text("Continue")');
-    await page.waitForTimeout(300);
+    await page.fill('input[placeholder="e.g., 5"]', '50');
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
     // Step 3: Flyer - skip the selection
     const skipBtn = page.locator('button').filter({ hasText: /Skip|without/ }).first();
     if (await skipBtn.isVisible()) {
       await skipBtn.click();
+      // Verify we're on campaign detail page (skipped flyer selection)
+      await page.waitForSelector('h1, h2, h3', { timeout: 5000 });
     }
   });
 

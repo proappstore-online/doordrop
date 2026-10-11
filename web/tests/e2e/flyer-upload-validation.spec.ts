@@ -69,7 +69,7 @@ test.describe('Flyer upload validation (Epic #32)', () => {
     );
 
     // Mock flyer list endpoint
-    await page.route('**/.pas/worker/v1/users/gh:test-client-upload/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-upload/flyers', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
     );
 

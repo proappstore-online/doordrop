@@ -77,7 +77,7 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
       archived_at: null,
     };
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -167,7 +167,7 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
 
   test('invalid or missing flyerId does not break campaign setup', async ({ page }) => {
     // Mock empty flyer list
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

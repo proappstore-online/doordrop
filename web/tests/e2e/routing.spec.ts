@@ -504,6 +504,14 @@ test.describe('Deep link restoration after sign-in', () => {
       }),
     );
 
+    await page.route('**/v1/config/platform', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ default_payment_mode: 'direct' }),
+      }),
+    );
+
     // Client somehow tries to access walker route
     await page.goto('/walker/campaign/campaign-123');
 

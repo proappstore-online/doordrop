@@ -97,7 +97,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
 
   test('displays flyer library with visual cards and search/sort controls', async ({ page }) => {
     // Mock flyer list
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -106,7 +106,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
     );
 
     // Mock campaign counts for each flyer
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers/*/campaigns', (route) => {
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers/*/campaigns', (route) => {
       const flyerId = route.request().url().split('/flyers/')[1].split('/')[0];
       let campaignCount = 0;
       if (flyerId === 'flyer-a-oldest') campaignCount = 2;
@@ -145,7 +145,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
   });
 
   test('search filters flyers by name and description', async ({ page }) => {
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -153,7 +153,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers/*/campaigns', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers/*/campaigns', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -191,7 +191,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
   });
 
   test('sort changes display order', async ({ page }) => {
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -199,7 +199,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers/*/campaigns', (route) => {
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers/*/campaigns', (route) => {
       const flyerId = route.request().url().split('/flyers/')[1].split('/')[0];
       let campaignCount = 0;
       if (flyerId === 'flyer-a-oldest') campaignCount = 2;
@@ -254,7 +254,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
 
   test('empty state guides first-time upload', async ({ page }) => {
     // Mock empty flyer list
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -277,7 +277,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
   });
 
   test('no-results state appears when search yields nothing', async ({ page }) => {
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -285,7 +285,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers/*/campaigns', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers/*/campaigns', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -307,7 +307,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
   });
 
   test('edit and delete actions are accessible', async ({ page }) => {
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -315,7 +315,7 @@ test.describe('Flyer library UX (Issue #50)', () => {
       }),
     );
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-2/flyers/*/campaigns', (route) =>
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-2/flyers/*/campaigns', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
