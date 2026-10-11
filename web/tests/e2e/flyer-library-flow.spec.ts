@@ -271,8 +271,11 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - verify selection prompt appears
-    await expect(page.locator('legend').filter({ hasText: 'Flyer selection' })).toBeVisible();
+    // Step 3: Flyer - open library and verify selection prompt appears with flyers
+    await page.click('button:has-text("Select from library")');
+    await page.waitForSelector('h3:has-text("Select from your library")', { timeout: 5000 });
+
+    // Verify library flyers are displayed
     await expect(page.getByText('Summer Sale Flyer')).toBeVisible();
     await expect(page.getByText('Winter Promo')).toBeVisible();
   });
@@ -462,7 +465,7 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await expect(page.getByText('Select Test Flyer').first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test('Skip flyer selection navigates to campaign without setting active flyer', async ({ page }) => {
+  test('Cancel flyer selection leaves draft without attachment and Continue disabled', async ({ page }) => {
     // Mock flyer endpoint with one flyer
     await page.route('**/.pas/worker/v1/users/gh%3Atest-client-1/flyers', (route) =>
       route.fulfill({
@@ -482,8 +485,13 @@ test.describe('Flyer library unification (Issue #21)', () => {
     );
 
     // Mock campaign create endpoint
+    let campaignPostCount = 0;
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
       if (route.request().method() === 'POST') {
+        campaignPostCount++;
+        const body = JSON.parse(route.request().postData() || '{}');
+        // Verify no activePrintoutId when skipping flyer selection
+        expect(body.active_printout_id).toBeUndefined();
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
@@ -513,13 +521,23 @@ test.describe('Flyer library unification (Issue #21)', () => {
     await page.click('button:has-text("Continue →")');
     await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
 
-    // Step 3: Flyer - skip the selection
-    const skipBtn = page.locator('button').filter({ hasText: /Skip|without/ }).first();
-    if (await skipBtn.isVisible()) {
-      await skipBtn.click();
-      // Verify we're on campaign detail page (skipped flyer selection)
-      await page.waitForSelector('h1, h2, h3', { timeout: 5000 });
-    }
+    // Step 3: Flyer - open library, verify flyer appears, then cancel
+    await page.click('button:has-text("Select from library")');
+    await page.waitForSelector('h3:has-text("Select from your library")', { timeout: 5000 });
+
+    // Verify the available flyer is displayed
+    await expect(page.getByText('Skip Test Flyer')).toBeVisible();
+
+    // Cancel without selecting
+    await page.click('button:has-text("Cancel")');
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
+
+    // Verify Continue button is disabled (no flyer selected)
+    const continueBtn = page.locator('button:has-text("Continue →")').first();
+    await expect(continueBtn).toBeDisabled({ timeout: 5000 });
+
+    // Verify campaign was created without active printout
+    expect(campaignPostCount).toBe(1);
   });
 
   test('Campaign detail shows empty state when no flyer selected', async ({ page }) => {
