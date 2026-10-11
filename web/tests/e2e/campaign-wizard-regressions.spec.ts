@@ -162,6 +162,10 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     const LIBRARY_FLYER_ID = 'lib-flyer-456';
     const PRINTOUT_ID = 'cp-789';
     const CAMPAIGN_ID = 'test-campaign-123';
+
+    // Track state mutations
+    let capturedPrintouts: any[] = [];
+    let capturedPatches: any[] = [];
     let printoutCreatedBody: any = null;
 
     // Mock library flyers endpoint
@@ -180,24 +184,27 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
       }),
     );
 
-    // Mock printout creation and list
-    await page.route(`**/.pas/worker/v1/campaigns/${CAMPAIGN_ID}/printouts`, async (route) => {
+    // Mock printout creation and list (fixed campaign ID in pattern)
+    await page.route('**/.pas/worker/v1/campaigns/test-campaign-123/printouts', async (route) => {
       if (route.request().method() === 'POST') {
         printoutCreatedBody = JSON.parse(route.request().postData() || '{}');
+        const createdPrintout = {
+          id: PRINTOUT_ID,
+          campaign_id: CAMPAIGN_ID,
+          version: 1,
+          flyer_id: LIBRARY_FLYER_ID,
+          name: 'Test Flyer',
+          file_url: 'https://example.com/flyer.png',
+        };
+        capturedPrintouts.push(createdPrintout);
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
-          body: JSON.stringify({
-            id: PRINTOUT_ID,
-            campaign_id: CAMPAIGN_ID,
-            version: 1,
-            flyer_id: LIBRARY_FLYER_ID,
-            name: 'Test Flyer',
-            file_url: 'https://example.com/flyer.png',
-          }),
+          body: JSON.stringify(createdPrintout),
         });
       }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      // GET: return whatever printouts were created
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(capturedPrintouts) });
     });
 
     // Mock campaign creation
@@ -220,24 +227,40 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
       return route.continue();
     });
 
-    // Mock campaign detail GET
-    await page.route(`**/.pas/worker/v1/campaigns/${CAMPAIGN_ID}`, async (route) => {
-      if (route.request().method() === 'GET') {
+    // Mock campaign detail GET and PATCH (fixed campaign ID in pattern)
+    await page.route('**/.pas/worker/v1/campaigns/test-campaign-123', async (route) => {
+      if (route.request().method() === 'PATCH') {
+        const patchBody = JSON.parse(route.request().postData() || '{}');
+        capturedPatches.push(patchBody);
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
             id: CAMPAIGN_ID,
             name: 'Test Campaign',
-            status: 'draft',
-            active_printout_id: PRINTOUT_ID,
+            status: patchBody.status || 'draft',
+            active_printout_id: patchBody.active_printout_id || (capturedPatches.length > 0 ? capturedPatches[0].active_printout_id : null),
             suburb: 'test',
             postcode: '2150',
             state: 'New South Wales',
           }),
         });
       }
-      return route.continue();
+      // GET: derive active_printout_id from latest PATCH, or null
+      const lastPatch = capturedPatches.length > 0 ? capturedPatches[capturedPatches.length - 1] : null;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: CAMPAIGN_ID,
+          name: 'Test Campaign',
+          status: lastPatch?.status || 'draft',
+          active_printout_id: lastPatch?.active_printout_id || null,
+          suburb: 'test',
+          postcode: '2150',
+          state: 'New South Wales',
+        }),
+      });
     });
 
     await page.goto('/app/setup');
