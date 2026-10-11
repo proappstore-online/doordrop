@@ -118,6 +118,9 @@ test.describe('Walker Core Journeys', () => {
   test('walker can see interest/assignment state for campaigns', async ({ page }) => {
     await page.goto('/walker/campaigns');
 
+    // Wait for page to load before checking elements
+    await page.waitForSelector('text="Job Discovery"');
+
     // Check for state indicators from #58 (interest/assignment states)
     const stateIndicators = [
       page.locator('text=Available'),

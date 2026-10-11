@@ -236,7 +236,8 @@ test.describe('Flyer library unification (Issue #21)', () => {
       },
     ];
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    // Mock flyer endpoint (use permissive pattern for URL-encoded userId)
+    await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -255,12 +256,46 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
+    // Mock campaign detail fetch
+    await page.route('**/.pas/worker/v1/campaigns/campaign-with-flyers', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'campaign-with-flyers',
+          name: 'Test Campaign',
+          status: 'draft',
+          suburb: 'parramatta',
+          postcode: '2150',
+          admin_ids: ['gh:test-client-1'],
+          created_at: Date.now(),
+          active_printout_id: null,
+        }),
+      }),
+    );
+
+    // Mock printouts endpoint
+    await page.route('**/.pas/worker/v1/campaigns/campaign-with-flyers/printouts', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      }),
+    );
+
     await page.goto('/app/setup');
 
+    // Wait for form to load
+    await page.waitForSelector('label:has-text("State")');
+
     // Fill in campaign form
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    // Click state select control
+    const stateControl = page.locator('[class*="-control"]').first();
+    await stateControl.click();
+
+    // Wait for dropdown to appear and select NSW
+    await page.locator('[class*="menu"]').first().waitFor({ state: 'visible' });
+    await page.getByText('NSW', { exact: true }).click();
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
@@ -471,7 +506,8 @@ test.describe('Flyer library unification (Issue #21)', () => {
       },
     ];
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    // Mock flyer endpoint (use permissive pattern for URL-encoded userId)
+    await page.route('**/v1/users/**/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -520,10 +556,17 @@ test.describe('Flyer library unification (Issue #21)', () => {
 
     await page.goto('/app/setup');
 
+    // Wait for form to load
+    await page.waitForSelector('label:has-text("State")');
+
     // Fill in campaign form
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    // Click state select control
+    const stateControl = page.locator('[class*="-control"]').first();
+    await stateControl.click();
+
+    // Wait for dropdown to appear and select NSW
+    await page.locator('[class*="menu"]').first().waitFor({ state: 'visible' });
+    await page.getByText('NSW', { exact: true }).click();
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');

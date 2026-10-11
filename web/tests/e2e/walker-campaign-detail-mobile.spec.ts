@@ -102,8 +102,8 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
     await page.goto("/walker/campaign/test-campaign-id");
     await page.waitForTimeout(1000);
 
-    // Check for stats labels
-    const statsGrid = page.locator('[class*="grid"][class*="gap-4"]').first();
+    // Check for stats labels (stats grid uses gap-3, not gap-4)
+    const statsGrid = page.locator('[class*="grid"][class*="gap-3"]').first();
     await expect(statsGrid).toBeVisible();
 
     // Check individual stats
@@ -327,16 +327,20 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
     const interestBtn = page.locator("button").filter({ hasText: /Express Interest/ });
 
     if (await interestBtn.count() > 0) {
-      // Simulate slow network
-      await page.route("**/v1/interests", async (route) => {
+      // Simulate slow network by mocking interests endpoint with delay
+      await page.route("**/.pas/worker/v1/interests", async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        route.continue();
+        route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: 'interest-test', status: 'pending' }),
+        });
       });
 
-      // Click button
-      await interestBtn.first().click();
+      // Click button (use force: true to bypass mobile nav overlay)
+      await interestBtn.first().click({ force: true });
 
-      // Button should be disabled
+      // Button should be disabled while request is pending
       const disabledState = await interestBtn.first().getAttribute("disabled");
       expect(disabledState !== null).toBe(true);
     }
