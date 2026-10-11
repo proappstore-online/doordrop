@@ -66,73 +66,154 @@ test.describe('Flyer library unification (Issue #21)', () => {
   });
 
   test('Create campaign without flyers shows no prompt and navigates directly', async ({ page }) => {
-    // Mock flyer list as empty
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    const mockFlyer = [
+      {
+        id: 'flyer-no-prompt',
+        name: 'No Prompt Flyer',
+        description: 'Flyer for no-prompt test',
+        file_url: 'https://example.com/no-prompt.png',
+        archived_at: null,
+        created_at: 1_700_000_000_000,
+      },
+    ];
+
+    // Mock flyer list with one flyer
+    await page.route('**/users/*/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([]),
+        body: JSON.stringify(mockFlyer),
       }),
     );
 
-    // Mock campaign creation
-    await page.route('**/.pas/worker/v1/campaigns', async (route) => {
-      if (route.request().method() === 'POST') {
+    // Mock campaign creation and fetch
+    await page.route('**/campaigns', async (route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
-          body: JSON.stringify({ id: 'campaign-no-flyers' }),
+          body: JSON.stringify({
+            id: 'campaign-no-flyers',
+            name: 'Parramatta Campaign',
+            status: 'draft',
+            suburb: 'parramatta',
+            postcode: '2150',
+            state: 'New South Wales',
+            admin_ids: ['gh:test-client-1'],
+            created_at: 1_700_000_000_000,
+            member_ids: ['gh:test-client-1'],
+          }),
         });
       }
       return route.continue();
     });
 
     // Mock campaign detail fetch
-    await page.route('**/.pas/worker/v1/campaigns/campaign-no-flyers', (route) =>
+    await page.route('**/campaigns/campaign-no-flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           id: 'campaign-no-flyers',
-          name: 'Test Campaign',
-          status: 'draft',
+          name: 'Parramatta Campaign',
+          status: 'published',
           suburb: 'parramatta',
           postcode: '2150',
+          state: 'New South Wales',
           admin_ids: ['gh:test-client-1'],
           created_at: 1_700_000_000_000,
           active_printout_id: null,
           member_ids: ['gh:test-client-1'],
+          doorRadiusM: 5000,
+          dueDate: 1_700_000_000_000 + 86400000 * 7,
+          budget: 500,
         }),
       }),
     );
 
-    // Mock printouts list
-    await page.route('**/.pas/worker/v1/campaigns/campaign-no-flyers/printouts', (route) =>
-      route.fulfill({
+    // Mock printouts
+    await page.route('**/printouts', async (route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
+        return route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'printout-no-prompt',
+            campaign_id: 'campaign-no-flyers',
+            version: 1,
+            name: 'No Prompt Flyer',
+            description: 'Flyer for no-prompt test',
+            file_url: 'https://example.com/no-prompt.png',
+            flyer_id: 'flyer-no-prompt',
+            created_at: 1_700_000_000_000,
+          }),
+        });
+      }
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([]),
-      }),
-    );
+      });
+    });
 
     await page.goto('/app/setup');
 
-    // Fill in campaign form
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    // Step 1: Location
+    await page.locator('[class*="-control"]').first().click();
+    await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
     await page.fill('input[maxlength="100"]', 'Parramatta');
     await page.fill('input[inputMode="numeric"]', '2150');
 
-    // Create campaign
-    await page.click('button:has-text("Create Campaign")');
+    // Continue to Delivery step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
-    // Should navigate directly to campaign detail without flyer prompt
+    // Step 2: Delivery Area
+    await page.fill('input[placeholder="e.g., 5"]', '5');
+
+    // Continue to Flyer step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
+
+    // Step 3: Flyer - select the available flyer
+    await page.click('button:has-text("Select from library")');
+    await page.waitForSelector('label:has-text("No Prompt Flyer")', { timeout: 5000 });
+    await page.click('label:has-text("No Prompt Flyer")');
+    await page.click('button:has-text("Confirm")');
+
+    // Continue to Schedule & Budget
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('label[for="start-date"]', { timeout: 5000 });
+
+    // Step 4: Schedule & Budget
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+
+    await page.fill('input[id="start-date"]', tomorrowStr);
+    await page.fill('input[id="end-date"]', nextWeekStr);
+    await page.fill('input[id="budget"]', '500');
+
+    // Continue to Review
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('h2:has-text("Campaign Summary")', { timeout: 5000 });
+
+    // Step 5: Review - publish
+    await page.click('button:has-text("Publish")');
+
+    // Should navigate to campaign detail
     await expect(page).toHaveURL('/app/campaign/campaign-no-flyers', { timeout: 10_000 });
 
-    // Verify we're on campaign detail page
-    await expect(page.getByText('No flyer selected')).toBeVisible({ timeout: 5_000 });
+    // Verify we're on campaign detail page with empty state
+    await expect(page.getByText('No flyer selected').first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('Create campaign with library flyers shows selection prompt', async ({ page }) => {
@@ -205,7 +286,8 @@ test.describe('Flyer library unification (Issue #21)', () => {
       },
     ];
 
-    await page.route('**/.pas/worker/v1/users/gh:test-client-1/flyers', (route) =>
+    // Mock ALL flyer requests before starting
+    await page.route('**/users/*/flyers', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -213,32 +295,54 @@ test.describe('Flyer library unification (Issue #21)', () => {
       }),
     );
 
-    await page.route('**/.pas/worker/v1/campaigns', async (route) => {
-      if (route.request().method() === 'POST') {
+    // Mock campaigns route (creation and detail fetch)
+    await page.route('**/campaigns', async (route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
         return route.fulfill({
           status: 201,
           contentType: 'application/json',
-          body: JSON.stringify({ id: 'campaign-select-flyer' }),
+          body: JSON.stringify({
+            id: 'campaign-select-flyer',
+            name: 'Parramatta Campaign',
+            status: 'draft',
+            suburb: 'parramatta',
+            postcode: '2150',
+            state: 'New South Wales',
+            admin_ids: ['gh:test-client-1'],
+            created_at: 1_700_000_000_000,
+            member_ids: ['gh:test-client-1'],
+          }),
         });
       }
       return route.continue();
     });
 
-    // Mock printout creation
-    await page.route('**/.pas/worker/v1/campaigns/campaign-select-flyer/printouts', async (route) => {
-      if (route.request().method() === 'POST') {
+    // Mock campaign detail fetch
+    await page.route('**/campaigns/campaign-select-flyer', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
         return route.fulfill({
-          status: 201,
+          status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ id: 'printout-1' }),
+          body: JSON.stringify({
+            id: 'campaign-select-flyer',
+            name: 'Parramatta Campaign',
+            status: 'published',
+            suburb: 'parramatta',
+            postcode: '2150',
+            state: 'New South Wales',
+            admin_ids: ['gh:test-client-1'],
+            created_at: 1_700_000_000_000,
+            active_printout_id: 'printout-1',
+            member_ids: ['gh:test-client-1'],
+            doorRadiusM: 5000,
+            dueDate: 1_700_000_000_000 + 86400000 * 7,
+            budget: 500,
+          }),
         });
       }
-      return route.continue();
-    });
-
-    // Mock campaign update to set active printout
-    await page.route('**/.pas/worker/v1/campaigns/campaign-select-flyer', async (route) => {
-      if (route.request().method() === 'PATCH') {
+      if (method === 'PATCH') {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -248,31 +352,26 @@ test.describe('Flyer library unification (Issue #21)', () => {
       return route.continue();
     });
 
-    // Mock campaign detail fetch with active printout
-    await page.route('**/.pas/worker/v1/campaigns/campaign-select-flyer', (route) => {
-      if (route.request().method() === 'GET') {
+    // Mock printouts operations
+    await page.route('**/printouts', async (route) => {
+      const method = route.request().method();
+      if (method === 'POST') {
         return route.fulfill({
-          status: 200,
+          status: 201,
           contentType: 'application/json',
           body: JSON.stringify({
-            id: 'campaign-select-flyer',
-            name: 'Test Campaign',
-            status: 'draft',
-            suburb: 'parramatta',
-            postcode: '2150',
-            admin_ids: ['gh:test-client-1'],
+            id: 'printout-1',
+            campaign_id: 'campaign-select-flyer',
+            version: 1,
+            name: 'Select Test Flyer',
+            description: 'This one will be selected',
+            file_url: 'https://example.com/test-flyer.png',
+            flyer_id: 'flyer-select-test',
             created_at: 1_700_000_000_000,
-            active_printout_id: 'printout-1',
-            member_ids: ['gh:test-client-1'],
           }),
         });
       }
-      return route.continue();
-    });
-
-    // Mock printouts list with active flyer
-    await page.route('**/.pas/worker/v1/campaigns/campaign-select-flyer/printouts', (route) =>
-      route.fulfill({
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([
@@ -287,37 +386,77 @@ test.describe('Flyer library unification (Issue #21)', () => {
             created_at: 1_700_000_000_000,
           },
         ]),
-      }),
-    );
+      });
+    });
 
     await page.goto('/app/setup');
 
-    // Fill in campaign form
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    // Step 1: Location - fill in state, suburb, postcode
+    // State: Use react-select control to select New South Wales
+    await page.locator('[class*="-control"]').first().click();
+    // Wait for menu to appear (react-select uses portal)
+    await page.waitForSelector('[class*="-option"]', { timeout: 5000 });
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
+    // Suburb
     await page.fill('input[maxlength="100"]', 'Parramatta');
+
+    // Postcode
     await page.fill('input[inputMode="numeric"]', '2150');
 
-    // Create campaign
-    await page.click('button:has-text("Create Campaign")');
+    // Continue to next step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Delivery area settings")', { timeout: 5000 });
 
-    // Flyer selection prompt should appear
-    await expect(page.getByText('Attach a Flyer?')).toBeVisible({ timeout: 5_000 });
+    // Step 2: Delivery Area - enter radius
+    await page.fill('input[placeholder="e.g., 5"]', '5');
 
-    // Select the flyer
+    // Continue to next step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('legend:has-text("Flyer selection")', { timeout: 5000 });
+
+    // Step 3: Flyer - select from library
+    await page.click('button:has-text("Select from library")');
+
+    // Wait for flyers to load and select the test flyer
+    await page.waitForSelector('label:has-text("Select Test Flyer")', { timeout: 5000 });
     await page.click('label:has-text("Select Test Flyer")');
+
+    // Verify flyer is selected (radio should be checked)
     await expect(page.getByRole('radio', { checked: true })).toBeVisible();
 
-    // Click attach button
-    await page.click('button:has-text("Attach Flyer")');
+    // Confirm selection
+    await page.click('button:has-text("Confirm")');
+
+    // Continue to next step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('label[for="start-date"]', { timeout: 5000 });
+
+    // Step 4: Schedule & Budget
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const nextWeekStr = nextWeek.toISOString().split('T')[0];
+
+    await page.fill('input[id="start-date"]', tomorrowStr);
+    await page.fill('input[id="end-date"]', nextWeekStr);
+    await page.fill('input[id="budget"]', '500');
+
+    // Continue to next step
+    await page.click('button:has-text("Continue →")');
+    await page.waitForSelector('h2:has-text("Campaign Summary")', { timeout: 5000 });
+
+    // Step 5: Review - publish campaign
+    await page.click('button:has-text("Publish")');
 
     // Should navigate to campaign detail with active flyer visible
     await expect(page).toHaveURL('/app/campaign/campaign-select-flyer', { timeout: 10_000 });
 
-    // Verify active flyer is displayed
-    await expect(page.getByText('Select Test Flyer')).toBeVisible({ timeout: 5_000 });
+    // Verify active flyer is displayed in the campaign (check the first occurrence)
+    await expect(page.getByText('Select Test Flyer').first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('Skip flyer selection navigates to campaign without setting active flyer', async ({ page }) => {
