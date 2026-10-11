@@ -16,7 +16,10 @@ test.describe('Walker happy path (mocked)', () => {
   ];
 
   test.beforeEach(async ({ page, context }) => {
-    // Mock campaigns endpoint FIRST before any mocks that setupWalkerAuth registers
+    // Set up walker authentication FIRST (registers auth mocks, does NOT navigate)
+    await setupWalkerAuth(page, context);
+
+    // Then register additional endpoint mocks
     await page.route(/\/\.pas\/worker\/v1\/campaigns(\?|$)/, (route) =>
       route.fulfill({
         status: 200,
@@ -25,13 +28,11 @@ test.describe('Walker happy path (mocked)', () => {
       }),
     );
 
-    // Set up walker authentication using shared fixture
-    await setupWalkerAuth(page, context);
+    // Finally, navigate after all mocks are registered
+    await page.goto('/walker');
   });
 
   test('/walker lands on the campaigns page and lists open campaigns', async ({ page }) => {
-    // Navigate to /walker (setupWalkerAuth already navigated to /,now navigate to walker route)
-    await page.goto('/walker');
     await expect(page).toHaveURL('/walker');
     await expect(page.getByText('Oak Ave Test')).toBeVisible({ timeout: 10_000 });
   });
