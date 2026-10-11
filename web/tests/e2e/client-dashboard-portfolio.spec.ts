@@ -14,13 +14,15 @@ test.describe('Client Dashboard - Campaign Portfolio (Issue #45)', () => {
   };
 
   test.beforeEach(async ({ page }) => {
-    // Mock authentication
+    // Mock authentication with session cookie and localStorage
     await page.addInitScript(
       ({ token, user }) => {
         localStorage.setItem(
           'fas:session:doordrop',
           JSON.stringify({ token, user, savedAt: Date.now() }),
         );
+        // Set session cookie via document.cookie for platform auth
+        document.cookie = `__Host-pas-session=${token}; Path=/; SameSite=Lax`;
       },
       { token: FAKE_TOKEN, user: FAKE_USER },
     );
