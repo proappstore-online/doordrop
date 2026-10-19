@@ -1579,7 +1579,12 @@ test.describe('Campaign active flyer management', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'client-flyer-test', role: 'client', name: 'Test Client' },
+          user: {
+            id: 'client-flyer-test',
+            role: 'client',
+            name: 'Test Client',
+            clientProfile: { onboardingCompleted: true },
+          },
           needsRoleSelection: false,
         }),
       }),
@@ -1750,7 +1755,8 @@ test.describe('Campaign active flyer management', () => {
 
     // Should show read-only text, not selector
     await expect(page.locator('select').first()).not.toBeVisible();
-    await expect(page.getByText('Summer Sale')).toBeVisible();
+    // The name is shown in more than one card on non-draft campaigns; any match proves the read-only display
+    await expect(page.getByText('Summer Sale').first()).toBeVisible();
 
     // Clear button should not be visible
     await expect(page.getByRole('button', { name: /Clear/i })).not.toBeVisible();

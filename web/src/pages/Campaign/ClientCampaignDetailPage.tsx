@@ -23,6 +23,7 @@ import PublishReadinessModal from "../../components/campaign/PublishReadinessMod
 import CampaignCommandHeader from "../../components/campaign/CampaignCommandHeader";
 import CampaignExceptionBanner from "../../components/campaign/CampaignExceptionBanner";
 import CampaignFlyerPanel from "../../components/campaign/CampaignFlyerPanel";
+import PrintoutSelector from "../../components/campaign/PrintoutSelector";
 import ReviewForm from "../../components/reviews/ReviewForm";
 import ReviewPrompt from "../../components/reviews/ReviewPrompt";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
@@ -71,6 +72,9 @@ const ClientCampaignDetailPage: React.FC = () => {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [printoutError, setPrintoutError] = useState<string | null>(null);
+  // Active-flyer choice not yet saved (kept after a failed save so it can be retried)
+  const [pendingPrintoutId, setPendingPrintoutId] = useState<string | null>(null);
 
   const [editBudget, setEditBudget] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
@@ -392,6 +396,21 @@ const ClientCampaignDetailPage: React.FC = () => {
     setShowPublishModal(false);
   };
 
+  const handleSelectActivePrintout = async (id: string) => {
+    if (!campaignId) return;
+    setPrintoutError(null);
+    setPendingPrintoutId(id);
+    try {
+      await CampaignRepository.updateGroup(campaignId, { activePrintoutId: id || undefined });
+      setCampaign((prev) => (prev ? { ...prev, activePrintoutId: id || undefined } : prev));
+      setPendingPrintoutId(null);
+    } catch (err) {
+      // Keep the chosen value in the selector so the admin can retry
+      console.error("Failed to update active flyer:", err);
+      setPrintoutError("We couldn't update the active flyer. Your selection has been kept—please try again.");
+    }
+  };
+
   const doorsRef = useRef(doors);
   doorsRef.current = doors;
   const activePrintoutIdRef = useRef(activePrintoutId);
@@ -625,6 +644,19 @@ const ClientCampaignDetailPage: React.FC = () => {
           dismissedExceptions={dismissedExceptions}
           onDismiss={(id) => setDismissedExceptions((prev) => new Set([...prev, id]))}
         />
+
+        {/* Active flyer selector (draft only; locked once the campaign moves on) */}
+        {isAdmin && campaign.status === "draft" && printouts.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
+            <PrintoutSelector
+              printouts={printouts}
+              selectedPrintoutId={pendingPrintoutId ?? activePrintoutId}
+              onSelectPrintout={handleSelectActivePrintout}
+              error={printoutError}
+              onDismissError={() => setPrintoutError(null)}
+            />
+          </div>
+        )}
 
         {/* Main Content Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -997,7 +1029,7 @@ const ClientCampaignDetailPage: React.FC = () => {
                 </svg>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-amber-900 dark:text-amber-100">No active flyer set</p>
-                  <p className="text-sm text-amber-800 dark:text-amber-200">Please select one of your flyers below before publishing. You won't be able to publish without an active flyer.</p>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">Please select one of your flyers above before publishing. You won't be able to publish without an active flyer.</p>
                 </div>
               </div>
             </div>
