@@ -337,12 +337,12 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
         });
       });
 
-      // Click button (use force: true to bypass mobile nav overlay)
-      await interestBtn.first().click({ force: true });
+      // Real click: fails if the bottom nav covers the button (#76)
+      const btnHandle = await interestBtn.first().elementHandle();
+      await interestBtn.first().click();
 
-      // Button should be disabled while request is pending
-      const disabledState = await interestBtn.first().getAttribute("disabled");
-      expect(disabledState !== null).toBe(true);
+      // Label flips to "Withdraw" while pending, so check the same element
+      expect(await btnHandle!.isDisabled()).toBe(true);
     }
   });
 
@@ -375,5 +375,34 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
       // Button should still be visible
       await expect(stickySection).toBeVisible();
     }
+  });
+
+  // Regression for #76: the bottom nav must not cover the sticky Express Interest CTA.
+  test("express interest CTA is not covered by the bottom nav", async ({ page }) => {
+    await page.goto("/walker/campaign/test-campaign-id");
+
+    const interestBtn = page.getByRole("button", { name: /express interest/i });
+    await expect(interestBtn).toBeVisible();
+
+    // Playwright's trial click runs the hit-target check without clicking
+    await interestBtn.click({ trial: true });
+
+    // The element at the button's centre must be the button itself, not the nav
+    const box = await interestBtn.boundingBox();
+    expect(box).not.toBeNull();
+    const hitIsButton = await interestBtn.evaluate(
+      (el, point) => {
+        const hit = document.elementFromPoint(point.x, point.y);
+        return hit !== null && el.contains(hit);
+      },
+      { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 },
+    );
+    expect(hitIsButton).toBe(true);
+
+    // And the button must sit above the nav's top edge
+    const nav = page.getByRole("navigation", { name: "Mobile navigation" });
+    const navBox = await nav.boundingBox();
+    expect(navBox).not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(navBox!.y);
   });
 });

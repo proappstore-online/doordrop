@@ -17,7 +17,7 @@ interface StickyActionBarProps {
 const StickyActionBar: React.FC<StickyActionBarProps> = ({ actions, className }) => {
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg z-30 ${className || ''}`}
+      className={`fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg z-30 ${className || ''}`}
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
       role="region"
       aria-label="Action bar"
