@@ -22,11 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has_e2e: ${{ steps.e2e-check.outputs.has_e2e }}
+      e2e_dir: ${{ steps.e2e-check.outputs.e2e_dir }}
     steps:
       - uses: actions/checkout@v4
       - name: Check for an E2E suite
         id: e2e-check
-        run: echo "has_e2e=$([ -d web/tests/e2e ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        # Two supported layouts (#264): a root e2e/ package run against the live
+        # app, or a Playwright suite inside the web workspace (web/tests/e2e with
+        # web/playwright.config.*), run by its own config.
+        run: |
+          if [ -d e2e ]; then DIR=e2e
+          elif [ -d web/tests/e2e ] && ls web/playwright.config.* >/dev/null 2>&1; then DIR=web
+          else DIR=""; fi
+          echo "e2e_dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "has_e2e=$([ -n "$DIR" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -145,6 +154,46 @@ jobs:
             exit 1
           fi
 
+      - name: Upload browser source maps (opt-in, keyless)
+        continue-on-error: true
+        run: |
+          # #393 (ADR-008 decision 7): an app opts in by building hidden source maps
+          # (vite: build.sourcemap: 'hidden'). They go to the platform's PRIVATE store
+          # as one bundle for this commit, with the same verified GitHub OIDC claims
+          # as every keyless step, never to the public bucket. Diagnostics never block
+          # a deploy: a refused upload is a warning, and the next step strips the maps
+          # whatever happened here.
+          DIR="${{ steps.dist.outputs.dir }}"
+          if [ -z "$(find "$DIR" -type f -name '*.map' -print -quit)" ]; then
+            echo "No source maps in $DIR (opt in with build.sourcemap: 'hidden')"; exit 0
+          fi
+          node -e 'const fs=require("fs"),p=require("path"),d=process.argv[1],files={};for(const f of fs.readdirSync(d,{recursive:true}).map(String)){if(f.endsWith(".map")&&fs.statSync(p.join(d,f)).isFile())files[f.split(p.sep).join("/").slice(0,-4)]=JSON.parse(fs.readFileSync(p.join(d,f),"utf8"))}process.stdout.write(JSON.stringify({files}))' "$DIR" > "$RUNNER_TEMP/sourcemaps.json"
+          OIDC=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.proappstore.online" | jq -r '.value')
+          if [ -z "$OIDC" ] || [ "$OIDC" = "null" ]; then echo "::warning::could not obtain an OIDC token; source maps not uploaded"; exit 0; fi
+          CODE=$(curl -sS -o "$RUNNER_TEMP/sourcemaps-resp.json" -w '%{http_code}' -X POST \
+            "https://api.proappstore.online/v1/apps/${{ github.event.repository.name }}/sourcemaps?commitSha=${{ github.sha }}" \
+            -H "Authorization: Bearer $OIDC" -H "Content-Type: application/json" --data-binary @"$RUNNER_TEMP/sourcemaps.json")
+          case "$CODE" in
+            201)
+              # Manifest verification: the platform recorded exactly the bytes sent.
+              if [ "$(jq -r '.assetDigest' "$RUNNER_TEMP/sourcemaps-resp.json")" = "$(sha256sum "$RUNNER_TEMP/sourcemaps.json" | cut -d' ' -f1)" ]; then
+                echo "Uploaded source maps for ${{ github.sha }} (digest verified)"
+              else
+                echo "::warning::source-map manifest digest does not match the uploaded bundle"
+              fi ;;
+            409) echo "Source maps for ${{ github.sha }} were already uploaded (releases are immutable)" ;;
+            *) echo "::warning::source-map upload refused (HTTP $CODE): $(jq -c '.error // .' "$RUNNER_TEMP/sourcemaps-resp.json" 2>/dev/null)" ;;
+          esac
+
+      - name: Strip source maps from the public build
+        run: |
+          # Always, opted in or not: the public bucket never carries a map (#393).
+          DIR="${{ steps.dist.outputs.dir }}"
+          N=$(find "$DIR" -type f -name '*.map' | wc -l | tr -d ' ')
+          find "$DIR" -type f -name '*.map' -delete
+          echo "Removed $N source map(s) from $DIR"
+
       - name: Mint deploy credentials (keyless — GitHub OIDC → platform)
         run: |
           # 1. Ask GitHub for an OIDC token scoped to the platform audience.
@@ -176,6 +225,86 @@ jobs:
             --delete --no-progress
           echo "Deployed apps/${{ github.event.repository.name }} from ${{ github.sha }}"
 
+      - name: Publish marketing site (marketing/ -> about-<app>, keyless)
+        if: hashFiles('marketing/package.json') != ''
+        continue-on-error: true
+        env:
+          APP_ID: ${{ github.event.repository.name }}
+          REVISION: ${{ github.sha }}
+        run: |
+          # #408: build the app's marketing/ folder and publish it to
+          # https://about-<app>.proappstore.online/ as an immutable revision named by
+          # this commit. The platform re-verifies every file before it goes live, and
+          # only a successful activation switches the site, so a broken build, upload
+          # or activation leaves the previous revision serving. Same keyless OIDC
+          # trust as the steps above; never blocks the app deploy (continue-on-error).
+          # A marketing/ added to an existing app (pas marketing add, #410) is not a
+          # pnpm workspace member, so the Install step above skipped it: install it
+          # on its own, leaving the app's lockfile alone.
+          [ -x marketing/node_modules/.bin/astro ] || pnpm --dir marketing install --ignore-workspace --no-frozen-lockfile
+          pnpm --dir marketing build
+          node --input-type=module <<'JS'
+          import { createHash } from 'node:crypto';
+          import { readdirSync, readFileSync, statSync } from 'node:fs';
+          import { join, relative, sep } from 'node:path';
+          const { APP_ID, REVISION, ACTIONS_ID_TOKEN_REQUEST_URL: tokenUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: tokenAuth } = process.env;
+          const API = 'https://api.proappstore.online/v1/apps/' + APP_ID + '/marketing/';
+          const SITE = 'https://about-' + APP_ID + '.proappstore.online';
+          // The platform's MARKETING_CONTENT_TYPES (backend lib/marketing-artifact.ts).
+          const TYPES = { html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8', xml: 'application/xml; charset=utf-8', txt: 'text/plain; charset=utf-8', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', ico: 'image/x-icon', svg: 'image/svg+xml', woff2: 'font/woff2' };
+          const DIST = 'marketing/dist';
+          const files = [];
+          const walk = (dir) => {
+            for (const name of readdirSync(dir).sort()) {
+              const full = join(dir, name);
+              if (statSync(full).isDirectory()) { walk(full); continue; }
+              const path = '/' + relative(DIST, full).split(sep).join('/');
+              if (path.endsWith('.map')) continue; // source maps are never published
+              const type = TYPES[path.split('.').pop().toLowerCase()];
+              if (!type) throw new Error('unsupported file in marketing/dist: ' + path);
+              const bytes = readFileSync(full);
+              files.push({ path, contentType: type, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), bytes });
+            }
+          };
+          walk(DIST);
+          const manifest = JSON.stringify({ schemaVersion: 1, appId: APP_ID, revision: REVISION, preview: false, origin: SITE,
+            files: files.map(({ path, contentType, size, sha256 }) => ({ path, contentType, size, sha256 })) });
+          const token = async () => {
+            const r = await fetch(tokenUrl + '&audience=' + encodeURIComponent('https://api.proappstore.online'), { headers: { Authorization: 'bearer ' + tokenAuth } });
+            if (!r.ok) throw new Error('OIDC token request failed (' + r.status + ')');
+            return (await r.json()).value;
+          };
+          const call = async (method, path, body, json) => {
+            const r = await fetch(API + path, { method, body, headers: { Authorization: 'Bearer ' + (await token()), ...(json ? { 'Content-Type': 'application/json' } : {}) } });
+            const text = await r.text();
+            if (!r.ok) throw new Error(method + ' ' + path + ' -> ' + r.status + ': ' + text.slice(0, 300));
+            return JSON.parse(text);
+          };
+          const form = new FormData();
+          form.set('manifest', manifest);
+          for (const f of files) form.append(f.path, new Blob([f.bytes], { type: f.contentType }), f.path.split('/').pop());
+          console.log('Uploaded', JSON.stringify(await call('PUT', 'revisions/' + REVISION, form, false)));
+          const activation = await call('POST', 'activate', JSON.stringify({ revision: REVISION }), true);
+          console.log('Activated', JSON.stringify(activation));
+          // Live check: the site answers from this revision.
+          let problem = 'not checked';
+          for (let attempt = 0; attempt < 5 && problem; attempt++) {
+            if (attempt) await new Promise((r) => setTimeout(r, 3000));
+            problem = null;
+            for (const method of ['GET', 'HEAD']) {
+              const r = await fetch(SITE + '/', { method, cache: 'no-store' });
+              const served = r.headers.get('x-pas-marketing-revision');
+              if (r.status !== 200 || served !== REVISION) problem = method + ' / -> ' + r.status + ' revision ' + served;
+            }
+          }
+          if (!problem) { console.log('Marketing site live: ' + SITE + '/ (' + REVISION + ')'); process.exit(0); }
+          console.log('::error::marketing site live check failed: ' + problem);
+          if (activation.previous && !activation.unchanged) {
+            console.log('Rolled back', JSON.stringify(await call('POST', 'rollback', JSON.stringify({ revision: activation.previous }), true)));
+          }
+          process.exit(1);
+          JS
+
       - name: Trigger post-deploy QA flows (keyless — GitHub OIDC)
         continue-on-error: true
         run: |
@@ -194,89 +323,47 @@ jobs:
   # Behavioural gate: drive the LIVE app in a real browser (the thing tsc/build
   # can't check). Runs after deploy; a failure fails the run, so the deploy
   # gate routes the ticket back to Dev with the Playwright output. Auth uses a
-  # mock session fixture via mocked API responses; deterministic, no external creds.
+  # platform fixture session via the SDK's real sign-in path (no test bypass);
+  # auth-gated specs skip when PAS_E2E_SESSION_TOKEN is unset.
   e2e:
     needs: deploy
     if: needs.deploy.outputs.has_e2e == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ needs.deploy.outputs.e2e_dir }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install deps
-        run: pnpm install --frozen-lockfile
+      - name: Install E2E deps
+        # e2e/ is its own package; a web/ suite uses the app's workspace install.
+        run: |
+          if [ "${{ needs.deploy.outputs.e2e_dir }}" = "e2e" ]; then npm install
+          else cd "$GITHUB_WORKSPACE" && pnpm install --frozen-lockfile; fi
       - name: Install Playwright browser
-        run: cd web && npx playwright install --with-deps chromium
-      - name: Run E2E tests (local with mocked API)
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E
         id: e2e
         continue-on-error: true
-        working-directory: web
         env:
-          CI: 'true'
-        run: pnpm test:e2e
+          E2E_BASE_URL: https://${{ github.event.repository.name }}.proappstore.online
+          E2E_SESSION_TOKEN: ${{ secrets.PAS_E2E_SESSION_TOKEN }}
+        run: npx playwright test
       - name: Publish test results (kb.proappstore.online/<app>/.e2e/summary.json)
         if: always()
-        working-directory: web
         env:
           APP: ${{ github.event.repository.name }}
         run: |
           node -e '
             const fs=require("fs");
-
-            // Fail-closed: missing, malformed, or zero-test runs are errors
-            let resultsPath="test-results/results.json";
-            if(!fs.existsSync(resultsPath)){ console.error("FAIL: "+resultsPath+" not found"); process.exit(1); }
-
-            let r;
-            try{ r=JSON.parse(fs.readFileSync(resultsPath,"utf8")); }
-            catch(e){ console.error("FAIL: "+resultsPath+" is not valid JSON: "+e.message); process.exit(1); }
-
-            if(!r || typeof r!=="object"){ console.error("FAIL: "+resultsPath+" root is not an object"); process.exit(1); }
-            if(!r.stats){ console.error("FAIL: "+resultsPath+" missing stats"); process.exit(1); }
-
-            const s=r.stats;
-
-            const specs=[];
+            let r={}; for(const f of ["results.json","test-results/results.json"]){ try{ r=JSON.parse(fs.readFileSync(f,"utf8")); break; }catch{} }
+            const s=r.stats||{}, specs=[];
             const walk=(su=[])=>su.forEach(x=>{ (x.specs||[]).forEach(sp=>specs.push({title:[x.title,sp.title].filter(Boolean).join(" > "),ok:sp.ok!==false})); walk(x.suites||[]); });
             walk(r.suites||[]);
-
-            // Check for fatal/global errors in the report
-            if(r.errors && Array.isArray(r.errors) && r.errors.length>0){
-              console.error("FAIL: Report contains errors: "+r.errors.map(e=>typeof e==="string"?e:e.message).join("; "));
-              process.exit(1);
-            }
-
-            // Validate counter values: must be non-negative integers, not strings or other types
-            if(!Number.isInteger(s.expected) || s.expected<0){
-              console.error("FAIL: stats.expected must be a non-negative integer, got: "+JSON.stringify(s.expected));
-              process.exit(1);
-            }
-            if(!Number.isInteger(s.unexpected) || s.unexpected<0){
-              console.error("FAIL: stats.unexpected must be a non-negative integer, got: "+JSON.stringify(s.unexpected));
-              process.exit(1);
-            }
-            if(!Number.isInteger(s.flaky) || s.flaky<0){
-              console.error("FAIL: stats.flaky must be a non-negative integer, got: "+JSON.stringify(s.flaky));
-              process.exit(1);
-            }
-            if(!Number.isInteger(s.skipped) || s.skipped<0){
-              console.error("FAIL: stats.skipped must be a non-negative integer, got: "+JSON.stringify(s.skipped));
-              process.exit(1);
-            }
-
-            const passedTests=s.expected;
-            const failedTests=s.unexpected;
-            const flakyTests=s.flaky;
-            const skippedTests=s.skipped;
-
-            const totalTests=passedTests+failedTests+flakyTests;
-            if(totalTests===0){ console.error("FAIL: no tests executed (all counts are 0)"); process.exit(1); }
-
-            const ok=failedTests===0 && totalTests>0;
-            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:passedTests, failed:failedTests, flaky:flakyTests, skipped:skippedTests, ok, specs }));
-            console.log("Processed results: "+passedTests+" passed, "+failedTests+" failed, "+flakyTests+" flaky, "+skippedTests+" skipped");
+            fs.writeFileSync("summary.json", JSON.stringify({ ranAt:new Date().toISOString(), passed:s.expected||0, failed:s.unexpected||0, flaky:s.flaky||0, skipped:s.skipped||0, ok:(s.unexpected||0)===0, specs }));
           '
           # Keyless (#57): mint an OIDC token bound to this repo instead of the
           # shared INTERNAL_TOKEN. kb-host derives the app prefix from the
