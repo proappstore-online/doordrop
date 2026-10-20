@@ -157,7 +157,7 @@ const WalkerDeliveryPage: React.FC = () => {
         ),
       );
       if (door.propertyId) {
-        PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch(() => {});
+        PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch((err) => console.error("Failed to grant walker property access:", err));
       }
     },
     [campaignId, currentUser],
@@ -212,7 +212,7 @@ const WalkerDeliveryPage: React.FC = () => {
           ),
         );
         if (door.propertyId && currentUser) {
-          PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch(() => {});
+          PropertyRepository.addAccessUser(door.propertyId, currentUser.id).catch((err) => console.error("Failed to grant walker property access:", err));
         }
       } catch (err) {
         console.error("Failed to record delivery:", err);
