@@ -2,6 +2,17 @@
 
 A two-sided flyer-delivery marketplace ported from Firebase to PAS (ProAppStore). If you're picking this up cold, start here. For the running task list and status of the port, see the [closed GitHub issues](https://github.com/proappstore-online/doordrop/issues?q=is%3Aissue+is%3Aclosed) tracking each phase (e.g., #46 campaign setup wizard, #48 lifecycle state machine, #49 command center, #52 walker mobile UX).
 
+## Delivery mode
+
+**Straight to `main`. No branches, no pull requests.** Declared 2026-08-16.
+
+- Commit small and often, directly to `main`. Do not run `git checkout -b`, `git switch -c`, or `gh pr create`.
+- If you find yourself on a non-`main` branch, stop and report it.
+- Use a closing keyword (e.g. `closes #N`) in the commit message of any commit that resolves an issue.
+- The old ticket-only mode (file issues, never change app code) is revoked. Fix the problems you find, within the rules above.
+
+## Product shape
+
 ## Product shape
 
 - **Clients** create *campaigns* targeting a suburb/postcode/street, set door radius + flyer policies, upload printouts, publish, approve walker interest, watch delivery happen, leave reviews.
