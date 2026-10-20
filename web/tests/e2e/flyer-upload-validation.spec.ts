@@ -189,4 +189,43 @@ test.describe('Flyer upload validation (Epic #32)', () => {
     const errorMessage = page.locator('text=File too large|Invalid file type');
     await expect(errorMessage).not.toBeVisible();
   });
+
+  test('flyer created in the library does not change any campaign', async ({ page }) => {
+    const campaignWrites: string[] = [];
+    const flyerPosts: Record<string, unknown>[] = [];
+
+    // Any campaign write would be a regression: library flyers have no campaign_id
+    await page.route('**/v1/campaigns/**', (route) => {
+      if (route.request().method() !== 'GET') campaignWrites.push(route.request().url());
+      return route.fallthrough();
+    });
+
+    await page.route('**/.pas/worker/v1/users/gh%3Atest-client-upload/flyers', (route) => {
+      if (route.request().method() === 'POST') {
+        flyerPosts.push(JSON.parse(route.request().postData() || '{}'));
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'flyer-lib-1' }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    });
+
+    await page.route('**/v1/apps/*/storage/**', (route) => {
+      if (route.request().method() !== 'PUT') return route.fallthrough();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: 'https://storage.example.com/library.jpg' }) });
+    });
+
+    await page.getByRole('button', { name: /Add Flyer/ }).click();
+    await page.waitForSelector('input[id="flyer-name"]');
+    await page.locator('input[id="flyer-name"]').fill('Library Only Flyer');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'library.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('fake image data'),
+    });
+    await page.getByRole('button', { name: /Save Flyer/ }).click();
+
+    await expect(page.getByText('Flyer saved to your library.')).toBeVisible();
+    expect(flyerPosts).toHaveLength(1);
+    expect(flyerPosts[0]).not.toHaveProperty('campaign_id');
+    expect(campaignWrites).toEqual([]);
+  });
 });

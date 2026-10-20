@@ -112,8 +112,9 @@ export function usePrintoutManagement(
       const updated = await PrintoutRepository.getVersions(campaignId);
       setPrintouts(updated);
 
-      // If this is the first printout and no active flyer is set, make it active
-      if (updated.length === 1 && !currentActivePrintoutId) {
+      // First-flyer-wins: if the campaign has no active flyer, the new one becomes active.
+      // An existing active flyer is left unchanged.
+      if (!currentActivePrintoutId) {
         try {
           await CampaignRepository.updateGroup(campaignId, { activePrintoutId: printoutId });
           if (onCampaignUpdate) {

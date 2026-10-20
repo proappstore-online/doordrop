@@ -1628,7 +1628,7 @@ test.describe('Campaign active flyer management', () => {
     await page.goto('/app/campaign/campaign-flyer-1');
 
     // Find and select a flyer
-    const flyerSelect = page.locator('select').first();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await flyerSelect.selectOption('printout1');
 
     // Verify selection was updated
@@ -1675,7 +1675,7 @@ test.describe('Campaign active flyer management', () => {
     await page.goto('/app/campaign/campaign-flyer-2');
 
     // Should show selector (not locked) with option to change
-    const flyerSelect = page.locator('select').first();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await expect(flyerSelect).toBeVisible();
     await expect(flyerSelect).toHaveValue('printout1');
 
@@ -1726,7 +1726,7 @@ test.describe('Campaign active flyer management', () => {
     await clearButton.click();
 
     // Flyer should be cleared
-    const flyerSelect = page.locator('select').first();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await expect(flyerSelect).toHaveValue('');
   });
 
@@ -1793,7 +1793,7 @@ test.describe('Campaign active flyer management', () => {
     await page.goto('/app/campaign/campaign-flyer-5');
 
     // Try to select a flyer (will fail)
-    const flyerSelect = page.locator('select').first();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await flyerSelect.selectOption('printout1');
 
     // Error should be shown
@@ -1841,11 +1841,27 @@ test.describe('Campaign flyer automatic activation on creation', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({
-          user: { id: 'client-auto-flyer-test', role: 'client', name: 'Test Client' },
+          user: {
+            id: 'client-auto-flyer-test',
+            email: 'auto-flyer@example.com',
+            name: 'Test Client',
+            role: 'client',
+            clientProfile: { onboardingCompleted: true },
+          },
           needsRoleSelection: false,
         }),
       }),
     );
+
+    // Mock flyer file upload (pas.storage.uploadPublic)
+    await page.route('**/v1/apps/*/storage/**', (route) => {
+      if (route.request().method() !== 'PUT') return route.fallthrough();
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: 'https://storage.example.com/auto-flyer.jpg' }),
+      });
+    });
   });
 
   test('creating first flyer automatically sets it as active', async ({ page }) => {
@@ -1931,11 +1947,87 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     await page.waitForTimeout(500);
 
     // Verify the flyer list shows the new flyer
-    await expect(page.getByText('First Flyer')).toBeVisible();
+    await expect(page.locator('span', { hasText: /^First Flyer$/ })).toBeVisible();
 
     // Verify the PrintoutSelector shows the flyer is selected
-    const flyerSelect = page.locator('select').first();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await expect(flyerSelect).toHaveValue(printouts[0]!.id);
+  });
+
+  test('new flyer becomes active when campaign has printouts but no active flyer', async ({ page }) => {
+    // Campaign already has a printout, but no active flyer is set
+    const mockCampaign = {
+      id: 'campaign-auto-4',
+      name: 'Legacy Printout Campaign',
+      status: 'draft',
+      adminIds: ['client-auto-flyer-test'],
+      activePrintoutId: undefined,
+      suburb: 'Melbourne',
+      postcode: '3000',
+      state: 'Victoria',
+    };
+
+    const printouts: any[] = [
+      { id: 'printout-legacy', name: 'Legacy Flyer', version: 1, createdAt: Date.now(), createdBy: 'client-auto-flyer-test' },
+    ];
+    const patches: Record<string, unknown>[] = [];
+
+    await page.route('**/v1/campaigns/campaign-auto-4', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(mockCampaign) });
+      }
+      if (route.request().method() === 'PATCH') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        patches.push(body);
+        if ('active_printout_id' in body) {
+          mockCampaign.activePrintoutId = body.active_printout_id;
+        }
+        return route.fulfill({ status: 200, body: JSON.stringify({ ok: true }) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/campaigns/campaign-auto-4/printouts', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, body: JSON.stringify(printouts) });
+      }
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const newPrintout = {
+          id: `printout-new-${printouts.length + 1}`,
+          name: body.name,
+          version: body.version,
+          createdAt: Date.now(),
+          createdBy: body.created_by,
+        };
+        printouts.push(newPrintout);
+        return route.fulfill({ status: 200, body: JSON.stringify(newPrintout) });
+      }
+      return route.fallthrough();
+    });
+
+    await page.route('**/v1/flyers*', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) }),
+    );
+
+    await page.goto('/app/campaign/campaign-auto-4');
+
+    await page.getByRole('button', { name: /\+ Add Flyer/i }).click();
+    await page.fill('input[placeholder="e.g. Summer Sale, Grand Opening..."]', 'Second Flyer B');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'second.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('fake image data'),
+    });
+    await page.waitForSelector('img[alt="Preview"]');
+    await page.getByRole('button', { name: /Save Flyer/i }).click();
+
+    await expect(page.locator('span', { hasText: /^Second Flyer B$/ })).toBeVisible();
+
+    // The new flyer is the one made active; the legacy flyer was not active before
+    const newId = printouts[printouts.length - 1].id;
+    expect(patches).toContainEqual({ active_printout_id: newId });
+    await expect(page.locator('select').filter({ hasText: 'Select a flyer...' })).toHaveValue(newId);
   });
 
   test('creating second flyer preserves already-active flyer selection', async ({ page }) => {
@@ -2005,8 +2097,8 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     await page.goto('/app/campaign/campaign-auto-2');
 
     // Verify first flyer is already shown as active
-    await expect(page.getByText('First Flyer')).toBeVisible();
-    const flyerSelect = page.locator('select').first();
+    await expect(page.locator('span', { hasText: /^First Flyer$/ })).toBeVisible();
+    const flyerSelect = page.locator('select').filter({ hasText: 'Select a flyer...' });
     await expect(flyerSelect).toHaveValue('printout-1-existing');
 
     // Open flyer form to add a second flyer
@@ -2033,7 +2125,7 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     await page.waitForTimeout(500);
 
     // Verify the second flyer was added
-    await expect(page.getByText('Second Flyer')).toBeVisible();
+    await expect(page.locator('span', { hasText: /^Second Flyer$/ })).toBeVisible();
 
     // Verify the first flyer is STILL selected (not replaced)
     await expect(flyerSelect).toHaveValue('printout-1-existing');
@@ -2125,14 +2217,18 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     await page.waitForTimeout(500);
 
     // Flyer should still be created despite activation error
-    await expect(page.getByText('Recovery Test Flyer')).toBeVisible();
+    await expect(page.locator('span', { hasText: /^Recovery Test Flyer$/ })).toBeVisible();
 
     // Error should be shown about activation failure
     await expect(page.getByText(/couldn't automatically activate the flyer/i)).toBeVisible();
 
     // User can dismiss the error
-    const dismissButton = page.locator('div[role="alert"] button').first();
-    await dismissButton.click();
+    const errorBox = page
+      .locator('div')
+      .filter({ has: page.getByText(/couldn't automatically activate/i) })
+      .filter({ has: page.getByRole('button', { name: '✕' }) })
+      .last();
+    await errorBox.getByRole('button', { name: '✕' }).click();
     await expect(page.getByText(/couldn't automatically activate the flyer/i)).not.toBeVisible();
   });
 });
