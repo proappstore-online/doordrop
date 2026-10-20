@@ -992,7 +992,7 @@ test.describe('Campaign creation', () => {
     );
   });
 
-  test('successful campaign creation redirects to detail page', async ({ page }) => {
+  test('completing the location step creates the campaign and advances to delivery area', async ({ page }) => {
     // Mock Nominatim geocoding success
     await page.route('**/nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({
@@ -1001,68 +1001,57 @@ test.describe('Campaign creation', () => {
       }),
     );
 
-    // Mock campaign creation success
+    let createdBody: Record<string, unknown> | null = null;
     await page.route('**/v1/campaigns', (route) => {
       if (route.request().method() === 'POST') {
-        const body = route.request().postData() || '{}';
-        const parsed = JSON.parse(body);
-        if (parsed.state && parsed.suburb && parsed.postcode && parsed.lat && parsed.lng) {
-          return route.fulfill({
-            status: 201,
-            body: JSON.stringify({ id: 'campaign-new-123', admin_ids: ['client-create-test'] }),
-          });
-        }
+        createdBody = JSON.parse(route.request().postData() || '{}');
+        return route.fulfill({
+          status: 201,
+          body: JSON.stringify({ id: 'campaign-new-123', admin_ids: ['client-create-test'] }),
+        });
       }
       return route.fallthrough();
     });
 
     await page.goto('/app/setup');
+    await expect(page.getByRole('heading', { name: 'Create a Campaign' })).toBeVisible();
 
-    // Select state
-    await page.click('text=Select a state');
-    await page.click('text=Victoria');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Victoria' }).click();
+    await page.fill('#suburb', 'Melbourne');
+    await page.fill('#postcode', '3000');
 
-    // Enter suburb
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Melbourne');
+    // The coordinates appear only once geocoding has returned them
+    await expect(page.getByText('Location validated successfully (-37.8136, 144.9631)')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue →' }).click();
 
-    // Enter postcode
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '3000');
-
-    // Submit
-    await page.click('button:has-text("Create Campaign")');
-
-    // Verify redirect to campaign detail page
-    await expect(page).toHaveURL('/app/campaign/campaign-new-123');
+    // The wizard moves on to step 2; the detail page is reached after publishing, not here
+    await expect(page.getByRole('progressbar', { name: /Step 2 of 5: Delivery Area/ })).toBeVisible();
+    expect(createdBody).toMatchObject({ state: 'Victoria', suburb: 'melbourne', postcode: '3000', lat: -37.8136 });
   });
 
-  test('empty state shows validation error', async ({ page }) => {
+  test('Continue stays disabled while the state is empty', async ({ page }) => {
     await page.goto('/app/setup');
 
-    // Leave state empty, fill others
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Melbourne');
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '3000');
+    // Leave state empty, fill the rest
+    await page.fill('#suburb', 'Melbourne');
+    await page.fill('#postcode', '3000');
 
-    // Submit
-    await page.click('button:has-text("Create Campaign")');
-
-    // Verify state error is shown
-    await expect(page.getByText('State is required')).toBeVisible();
-    // Should not navigate away
+    // The wizard blocks advancing rather than showing per-field errors on submit
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
     await expect(page).toHaveURL('/app/setup');
   });
 
-  test('empty suburb shows validation error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=New South Wales');
+  test('Continue stays disabled while the suburb is empty', async ({ page }) => {
+    await page.goto('/app/setup');
+
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
     // Leave suburb empty
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '2000');
+    await page.fill('#postcode', '2000');
 
-    // Submit
-    await page.click('button:has-text("Create Campaign")');
-
-    // Verify suburb error is shown
-    await expect(page.getByText('Suburb is required')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
     await expect(page).toHaveURL('/app/setup');
   });
 
@@ -1089,60 +1078,49 @@ test.describe('Campaign creation', () => {
     expect(campaignPostCount).toBe(0);
   });
 
-  test('form state is preserved on validation error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=Victoria');
+  // Geocoding failures are a non-blocking warning: the wizard shows the message and lets the user continue.
+  // Retries back off over a few seconds, so allow extra time for the warning to appear.
+  const GEOCODE_WARNING = /Could not verify location coordinates/;
 
-    const suburb = 'Fitzroy';
-    const postcode = '3065';
-
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', suburb);
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', postcode);
-
-    // Submit without valid geocoding (to trigger an error)
+  test('form state is preserved when geocoding finds no match', async ({ page }) => {
     await page.route('**/nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({
         status: 200,
-        body: JSON.stringify([]), // Empty result = geocoding failure
+        body: JSON.stringify([]), // Empty result = location not found
       }),
     );
 
-    await page.click('button:has-text("Create Campaign")');
+    await page.goto('/app/setup');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Victoria' }).click();
 
-    // Verify error is shown
-    await expect(page.getByText(/could not verify that suburb and postcode/i)).toBeVisible();
+    const suburb = 'Fitzroy';
+    const postcode = '3065';
+    await page.fill('#suburb', suburb);
+    await page.fill('#postcode', postcode);
 
-    // Verify form state is preserved
-    await expect(page.locator('input[aria-describedby="campaign-suburb-error"]')).toHaveValue(suburb);
-    await expect(page.locator('input[aria-describedby="campaign-postcode-error"]')).toHaveValue(postcode);
+    await expect(page.getByText(GEOCODE_WARNING)).toBeVisible({ timeout: 15_000 });
+
+    // Form values are kept and the user can still continue
+    await expect(page.locator('#suburb')).toHaveValue(suburb);
+    await expect(page.locator('#postcode')).toHaveValue(postcode);
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeEnabled();
   });
 
-  test('geocoding timeout shows actionable error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=South Australia');
+  test('geocoding request that never completes shows the warning', async ({ page }) => {
+    await page.route('**/nominatim.openstreetmap.org/**', (route) => route.abort());
 
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Adelaide');
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '5000');
+    await page.goto('/app/setup');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'South Australia' }).click();
+    await page.fill('#suburb', 'Adelaide');
+    await page.fill('#postcode', '5000');
 
-    // Mock timeout by never responding
-    await page.route('**/nominatim.openstreetmap.org/**', (route) => {
-      route.abort();
-    });
-
-    await page.click('button:has-text("Create Campaign")');
-
-    // Verify timeout error is shown
-    await expect(page.getByText(/location verification took too long/i)).toBeVisible();
+    await expect(page.getByText(GEOCODE_WARNING)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeEnabled();
   });
 
-  test('geocoding unavailable shows actionable error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=Western Australia');
-
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Perth');
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '6000');
-
-    // Mock service unavailable
+  test('geocoding service error shows the warning', async ({ page }) => {
     await page.route('**/nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({
         status: 503,
@@ -1150,20 +1128,17 @@ test.describe('Campaign creation', () => {
       }),
     );
 
-    await page.click('button:has-text("Create Campaign")');
+    await page.goto('/app/setup');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Western Australia' }).click();
+    await page.fill('#suburb', 'Perth');
+    await page.fill('#postcode', '6000');
 
-    // Verify unavailable error is shown
-    await expect(page.getByText(/location verification is temporarily unavailable/i)).toBeVisible();
+    await expect(page.getByText(GEOCODE_WARNING)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeEnabled();
   });
 
-  test('unresolvable location shows actionable error', async ({ page }) => {
-    await page.click('text=Select a state');
-    await page.click('text=Tasmania');
-
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'InvalidSuburb123');
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '7000');
-
-    // Mock empty geocoding result
+  test('unresolvable location shows the warning', async ({ page }) => {
     await page.route('**/nominatim.openstreetmap.org/**', (route) =>
       route.fulfill({
         status: 200,
@@ -1171,10 +1146,13 @@ test.describe('Campaign creation', () => {
       }),
     );
 
-    await page.click('button:has-text("Create Campaign")');
+    await page.goto('/app/setup');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Tasmania' }).click();
+    await page.fill('#suburb', 'InvalidSuburb');
+    await page.fill('#postcode', '7000');
 
-    // Verify actionable error message
-    await expect(page.getByText(/could not verify that suburb and postcode.*check the state/i)).toBeVisible();
+    await expect(page.getByText(GEOCODE_WARNING)).toBeVisible({ timeout: 15_000 });
   });
 
   test('API failure shows error without losing form state', async ({ page }) => {
@@ -1197,24 +1175,26 @@ test.describe('Campaign creation', () => {
       return route.fallthrough();
     });
 
-    await page.click('text=Select a state');
-    await page.click('text=Northern Territory');
+    await page.goto('/app/setup');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'Northern Territory' }).click();
 
     const suburb = 'Darwin';
     const postcode = '0800';
 
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', suburb);
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', postcode);
+    await page.fill('#suburb', suburb);
+    await page.fill('#postcode', postcode);
 
-    // Submit
-    await page.click('button:has-text("Create Campaign")');
+    // Wait for the location to geocode, then submit
+    await expect(page.getByText('Location validated successfully (-31.9505, 115.8605)')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue →' }).click();
 
     // Verify API error is shown
-    await expect(page.getByText(/could not create your campaign/i)).toBeVisible();
+    await expect(page.getByText('Failed to create campaign. Please try again.')).toBeVisible();
 
     // Verify form state is preserved
-    await expect(page.locator('input[aria-describedby="campaign-suburb-error"]')).toHaveValue(suburb);
-    await expect(page.locator('input[aria-describedby="campaign-postcode-error"]')).toHaveValue(postcode);
+    await expect(page.locator('#suburb')).toHaveValue(suburb);
+    await expect(page.locator('#postcode')).toHaveValue(postcode);
   });
 
   test('duplicate submission is prevented', async ({ page }) => {
@@ -1242,52 +1222,38 @@ test.describe('Campaign creation', () => {
     });
 
     await page.goto('/app/setup');
-
-    // Select state
-    await page.click('text=Select a state');
-    await page.click('text=New South Wales');
+    await expect(page.getByRole('heading', { name: 'Create a Campaign' })).toBeVisible();
 
     // Enter location
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Sydney');
-    await page.fill('input[aria-describedby="campaign-postcode-error"]', '2000');
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'New South Wales' }).click();
+    await page.fill('#suburb', 'Sydney');
+    await page.fill('#postcode', '2000');
 
-    // Click submit and immediately click again (attempt duplicate submission)
-    const submitButton = page.locator('button:has-text("Create Campaign")');
-    await submitButton.click();
-    await submitButton.click();
+    // Wait for the location to geocode, then click Continue once
+    await expect(page.getByText('Location validated successfully (-33.8688, 151.2093)')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue →' }).click();
 
-    // Wait for redirect (should only happen once)
-    await expect(page).toHaveURL('/app/campaign/campaign-new-456');
+    // While the campaign is being created the button is disabled and relabelled, so a second click can't fire
+    await expect(page.getByRole('button', { name: 'Creating...' })).toBeDisabled();
+
+    // Wait for the step to advance (the request resolves after its 1 s delay)
+    await expect(page.getByRole('progressbar', { name: /Step 2 of 5: Delivery Area/ })).toBeVisible();
 
     // Verify only one request was made
     expect(createCount).toBe(1);
   });
 
-  test('clearing form errors when fields change', async ({ page }) => {
+  test('suburb validation error clears when the suburb is corrected', async ({ page }) => {
     await page.goto('/app/setup');
 
-    // Leave all fields empty and submit
-    await page.click('button:has-text("Create Campaign")');
+    // A digit in the suburb shows an inline error
+    await page.fill('#suburb', 'Geelong3');
+    await expect(page.getByText('Suburb cannot contain numbers')).toBeVisible();
 
-    // Verify errors are shown
-    await expect(page.getByText('State is required')).toBeVisible();
-    await expect(page.getByText('Suburb is required')).toBeVisible();
-    await expect(page.getByText('Postcode is required')).toBeVisible();
-
-    // Change state - should clear errors
-    await page.click('text=Select a state');
-    await page.click('text=Victoria');
-
-    // State error should be gone, others remain
-    await expect(page.getByText('State is required')).not.toBeVisible();
-    await expect(page.getByText('Suburb is required')).toBeVisible();
-    await expect(page.getByText('Postcode is required')).toBeVisible();
-
-    // Fill suburb
-    await page.fill('input[aria-describedby="campaign-suburb-error"]', 'Geelong');
-
-    // Suburb error should be gone
-    await expect(page.getByText('Suburb is required')).not.toBeVisible();
+    // Correcting the value clears it
+    await page.fill('#suburb', 'Geelong');
+    await expect(page.getByText('Suburb cannot contain numbers')).not.toBeVisible();
   });
 });
 
