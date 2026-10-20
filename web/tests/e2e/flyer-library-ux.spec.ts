@@ -328,8 +328,8 @@ test.describe('Flyer library UX (Issue #50)', () => {
     // Wait for flyer to load
     await expect(page.getByText('Autumn Leaves')).toBeVisible({ timeout: 5_000 });
 
-    // Find the card and verify edit/delete buttons are accessible
-    const card = page.locator('text="Autumn Leaves"').locator('..');
+    // Find the whole card (the title's parent holds only the heading, not the action buttons)
+    const card = page.locator('div.group').filter({ has: page.getByRole('heading', { name: 'Autumn Leaves' }) });
 
     // Check for accessible labels on buttons
     await expect(card.getByRole('button', { name: /Edit/i })).toBeVisible();
