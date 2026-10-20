@@ -323,6 +323,25 @@ describe('a walker cannot see or act on another walker\'s assignment', () => {
 });
 
 // #85: a walker sees the campaigns they're assigned to and open ones, not another walker's assignment.
+// #86: a walker's interest notifies the campaign admin in real time, not only in the notifications table.
+describe('interest notifications (#86)', () => {
+  it('publishes notification.created to each campaign admin room when a walker expresses interest', async () => {
+    const pas = fakePas(db, WALKER_2);
+    const publish = vi.fn(async () => ({ delivered: 1 }));
+    pas.rooms.publish = publish;
+    const res = await app.fetch(
+      new Request('https://doordrop.proappstore.online/v1/interests', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
+      }),
+      { pas },
+    );
+    expect(res.status).toBe(201);
+    expect(publish).toHaveBeenCalledWith(`user:${CLIENT_1}`, { type: 'notification.created', userId: CLIENT_1 });
+  });
+});
+
 describe('walker isolation: campaigns, profiles, reviews and status (#85)', () => {
   it('walker A cannot list or open walker B\'s assigned campaign, through the worker', async () => {
     const list = await req(WALKER_2, 'GET', '/v1/campaigns');

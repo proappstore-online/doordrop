@@ -232,6 +232,18 @@
       "requires_auth": true
     },
     {
+      "name": "campaign_admins_for_interest",
+      "description": "The admin ids of a campaign the caller has expressed interest in, so those admins can be notified",
+      "operation": "query",
+      "sql": "SELECT c.admin_ids FROM campaigns c WHERE c.id = :campaign_id AND EXISTS (SELECT 1 FROM walker_interests wi WHERE wi.campaign_id = c.id AND wi.walker_id = :__user_id)",
+      "params": {
+        "campaign_id": {
+          "type": "string"
+        }
+      },
+      "requires_auth": true
+    },
+    {
       "name": "create_campaign",
       "description": "Create a campaign; the caller must be a client or admin and one of its admin_ids",
       "operation": "execute",
