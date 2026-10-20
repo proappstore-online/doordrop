@@ -185,13 +185,9 @@ test.describe('Walker Mobile Accessibility', () => {
 
     for (const url of pages) {
       await page.goto(url);
-      await page.waitForTimeout(500);
 
-      const hasHeadings = await page.evaluate(() => {
-        return document.querySelectorAll('h1, h2, h3, h4, h5, h6').length > 0;
-      });
-
-      expect(hasHeadings).toBe(true);
+      // Poll until the page has rendered its headings, rather than checking once after a fixed delay
+      await expect.poll(() => page.locator('h1, h2, h3, h4, h5, h6').count()).toBeGreaterThan(0);
     }
   });
 
