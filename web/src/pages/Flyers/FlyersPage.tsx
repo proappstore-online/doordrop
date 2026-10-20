@@ -4,6 +4,7 @@ import { useAuthContext } from "../../hooks/useAuthContext";
 import { FlyerRepository, type CampaignDependency } from "../../repositories/flyerRepository";
 import type { FlyerData } from "../../models/flyer";
 import { uploadFile } from "../../utils/storageUpload";
+import { FLYER_ACCEPTED_EXTENSIONS, FLYER_MAX_SIZE_MB, validateFlyerFile } from "../../utils/flyerValidator";
 
 type Feedback = { type: "success" | "error"; message: string };
 type SortKey = "name" | "date" | "usage";
@@ -109,6 +110,13 @@ const FlyersPage: React.FC = () => {
     e.preventDefault();
     if (!currentUser || !name.trim()) return;
     setFeedback(null);
+    if (file) {
+      const fileError = validateFlyerFile(file);
+      if (fileError) {
+        setFeedback({ type: "error", message: fileError });
+        return;
+      }
+    }
     setSaving(true);
     try {
       let fileUrl: string | undefined;
@@ -163,6 +171,13 @@ const FlyersPage: React.FC = () => {
   const handleUpdate = async (flyerId: string) => {
     if (!currentUser || !editName.trim()) return;
     setFeedback(null);
+    if (editFile) {
+      const fileError = validateFlyerFile(editFile);
+      if (fileError) {
+        setFeedback({ type: "error", message: fileError });
+        return;
+      }
+    }
     setEditSaving(true);
     try {
       const updates: Partial<Pick<FlyerData, "name" | "description" | "fileUrl">> = {
@@ -350,7 +365,7 @@ const FlyersPage: React.FC = () => {
             <input
               id="flyer-image"
               type="file"
-              accept="image/*"
+              accept={FLYER_ACCEPTED_EXTENSIONS}
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 if (filePreview) URL.revokeObjectURL(filePreview);
@@ -361,7 +376,7 @@ const FlyersPage: React.FC = () => {
               aria-describedby="image-hint"
             />
             <p id="image-hint" className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              JPG, PNG, or GIF. Max 10MB.
+              JPG, PNG, WebP, GIF or PDF. Max {FLYER_MAX_SIZE_MB}MB.
             </p>
           </div>
           <div className="flex gap-2 pt-4">
@@ -463,7 +478,7 @@ const FlyersPage: React.FC = () => {
                     )}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={FLYER_ACCEPTED_EXTENSIONS}
                       onChange={(e) => {
                         const fl = e.target.files?.[0] ?? null;
                         if (editFilePreview) URL.revokeObjectURL(editFilePreview);
