@@ -100,7 +100,7 @@ const WalkerSessionStartScreen: React.FC<WalkerSessionStartScreenProps> = ({
     const checkBattery = async () => {
       try {
         if ('getBattery' in navigator) {
-          const battery = await (navigator as any).getBattery();
+          const battery = await (navigator as Navigator & { getBattery(): Promise<{ level: number }> }).getBattery();
           const batteryPercent = Math.round(battery.level * 100);
           setReadiness((prev) => ({
             ...prev,

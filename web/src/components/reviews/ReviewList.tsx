@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/timestampToDate";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import StarRating from "./StarRating";
 import { WalkerReviewRepository, type PaginationCursor } from "../../repositories/walkerReviewRepository";
@@ -60,7 +61,7 @@ const ReviewList: React.FC<ReviewListProps> = ({ walkerId }) => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {review.createdAt instanceof Date
                     ? review.createdAt.toLocaleDateString()
-                    : new Date(review.createdAt as any).toLocaleDateString()}
+                    : toDate(review.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </div>

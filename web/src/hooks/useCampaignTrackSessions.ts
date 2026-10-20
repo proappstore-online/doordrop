@@ -27,7 +27,7 @@ export function useCampaignTrackSessions(campaignId: string | undefined) {
 
   // Real-time track sessions via fas.rooms with fallback polling.
   // Aggregates points + stops from sessions started in the last 24h.
-  const app = useApp() as any;
+  const app = useApp();
   useEffect(() => {
     if (!campaignId) return;
     let cancelled = false;

@@ -46,7 +46,7 @@ async function hasRecentActivity(campaignId: string): Promise<boolean> {
 
 export function useActiveCampaignTracking(campaignIds: string[]) {
   const [activeCampaigns, setActiveCampaigns] = useState<Set<string>>(new Set());
-  const app = useApp() as any;
+  const app = useApp();
 
   useEffect(() => {
     if (campaignIds.length === 0) {

@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/timestampToDate";
 import React, { useEffect, useState, useMemo } from "react";
 import { useApp } from "@proappstore/sdk";
 import { useParams, Link, useLocation } from "react-router-dom";
@@ -43,7 +44,7 @@ const DoorDetailPage: React.FC = () => {
 
   // Live door updates via campaign room events with fallback polling.
   // Door updates come via door.changed events published to campaign:{id} room.
-  const app = useApp() as any;
+  const app = useApp();
   useEffect(() => {
     if (!campaignId || !doorId) return;
     let cancelled = false;
@@ -138,8 +139,8 @@ const DoorDetailPage: React.FC = () => {
   const sortedHistory = useMemo(() => {
     if (!door?.history) return [];
     return [...door.history].sort((a, b) => {
-      const da = a.date instanceof Date ? a.date : new Date(a.date as any);
-      const db = b.date instanceof Date ? b.date : new Date(b.date as any);
+      const da = toDate(a.date);
+      const db = toDate(b.date);
       return db.getTime() - da.getTime();
     });
   }, [door?.history]);
@@ -147,8 +148,8 @@ const DoorDetailPage: React.FC = () => {
   const sortedReports = useMemo(() => {
     if (propertyReports.length === 0) return [];
     return [...propertyReports].sort((a, b) => {
-      const da = a.reportedAt instanceof Date ? a.reportedAt : new Date(a.reportedAt as any);
-      const db = b.reportedAt instanceof Date ? b.reportedAt : new Date(b.reportedAt as any);
+      const da = toDate(a.reportedAt);
+      const db = toDate(b.reportedAt);
       return db.getTime() - da.getTime();
     });
   }, [propertyReports]);
@@ -226,7 +227,7 @@ const DoorDetailPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
           <div className="text-xs text-gray-500 dark:text-gray-400">Last Delivered</div>
           <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">
-            {door.deliveredAt ? new Date(door.deliveredAt as any).toLocaleDateString() : "\u2014"}
+            {door.deliveredAt ? toDate(door.deliveredAt).toLocaleDateString() : "\u2014"}
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
@@ -257,7 +258,7 @@ const DoorDetailPage: React.FC = () => {
         {sortedHistory.length > 0 ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
             {sortedHistory.map((event, idx) => {
-              const eventDate = event.date instanceof Date ? event.date : new Date(event.date as any);
+              const eventDate = toDate(event.date);
               const printout = event.printoutVersionId
                 ? printouts.find((p) => p.id === event.printoutVersionId)
                 : null;
@@ -301,7 +302,7 @@ const DoorDetailPage: React.FC = () => {
         {sortedReports.length > 0 ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
             {sortedReports.map((report, idx) => {
-              const reportDate = report.reportedAt instanceof Date ? report.reportedAt : new Date(report.reportedAt as any);
+              const reportDate = toDate(report.reportedAt);
               return (
                 <div key={idx} className="px-4 py-3 flex items-start gap-3">
                   <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />

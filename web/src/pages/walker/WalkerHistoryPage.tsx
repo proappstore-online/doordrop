@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuthContext } from '../../hooks/useAuthContext';
-import { timestampToDate } from '../../utils/timestampToDate';
+import { timestampToDate, toDate } from '../../utils/timestampToDate';
 import { HistoryRecordRepository } from '../../repositories/historyRecordRepository';
 import { CampaignRepository } from '../../repositories/campaignRepository';
 import type { HistoryRecordData } from '../../models/historyRecord';
@@ -155,7 +155,7 @@ const WalkerHistoryPage: React.FC = () => {
 
 		// Sort each group by date (newest first)
 		for (const group of Object.values(groups)) {
-			group.sort((a, b) => (b.date as any) - (a.date as any));
+			group.sort((a, b) => toDate(b.date).getTime() - toDate(a.date).getTime());
 		}
 
 		return groups;

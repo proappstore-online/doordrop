@@ -8,7 +8,7 @@ import {
 
 export const useNotifications = () => {
   const { currentUser } = useAuthContext();
-  const app = useApp() as any;
+  const app = useApp();
   const [notifications, setNotifications] = useState<NotificationWithId[]>([]);
 
   const refresh = useCallback(async () => {

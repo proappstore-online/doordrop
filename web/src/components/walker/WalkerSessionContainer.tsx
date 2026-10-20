@@ -6,6 +6,8 @@ import WalkerSessionStartScreen from './WalkerSessionStartScreen';
 import WalkerSessionInProgress from './WalkerSessionInProgress';
 import WalkerSessionEndScreen from './WalkerSessionEndScreen';
 
+type SessionEndReason = React.ComponentProps<typeof WalkerSessionEndScreen>['endReason'];
+
 type SessionPhase = 'readiness' | 'active' | 'ended';
 
 interface Exception {
@@ -62,7 +64,7 @@ const WalkerSessionContainer: React.FC<WalkerSessionContainerProps> = ({
   const [exceptions, setExceptions] = useState<Exception[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [selectedDoor, setSelectedDoor] = useState<(DoorData & { id: string }) | null>(null);
-  const [endReason, setEndReason] = useState<string>('manual_stop');
+  const [endReason, setEndReason] = useState<SessionEndReason>('manual_stop');
   const [endError, setEndError] = useState<string | null>(null);
 
   // Determine active exception (most recent of severity)
@@ -275,7 +277,7 @@ const WalkerSessionContainer: React.FC<WalkerSessionContainerProps> = ({
       totalDoors={campaign.totalDoors || doors.length}
       totalDistance={distanceKm}
       totalDuration={elapsedMinutes}
-      endReason={endReason as any}
+      endReason={endReason}
       error={endError || undefined}
       canResume={geoError === null && navigator.onLine && trackingState !== 'left_area'}
       onResume={geoError === null && navigator.onLine ? handleResumeSession : undefined}

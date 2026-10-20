@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/timestampToDate";
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
@@ -97,8 +98,8 @@ const PropertyDetailPage: React.FC = () => {
 
         // Sort newest first
         entries.sort((a, b) => {
-          const da = a.date instanceof Date ? a.date : new Date(a.date as any);
-          const db = b.date instanceof Date ? b.date : new Date(b.date as any);
+          const da = toDate(a.date);
+          const db = toDate(b.date);
           return db.getTime() - da.getTime();
         });
 
@@ -186,7 +187,7 @@ const PropertyDetailPage: React.FC = () => {
         ) : deliveryHistory.length > 0 ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
             {deliveryHistory.map((entry, idx) => {
-              const eventDate = entry.date instanceof Date ? entry.date : new Date(entry.date as any);
+              const eventDate = toDate(entry.date);
               return (
                 <div key={idx} className="px-4 py-3 flex items-start gap-3">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 mt-1.5" />
@@ -234,7 +235,7 @@ const PropertyDetailPage: React.FC = () => {
         ) : propertyReports.length > 0 ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
             {propertyReports.map((report, idx) => {
-              const reportDate = report.reportedAt instanceof Date ? report.reportedAt : new Date(report.reportedAt as any);
+              const reportDate = toDate(report.reportedAt);
               return (
                 <div key={idx} className="px-4 py-3 flex items-start gap-3">
                   <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />

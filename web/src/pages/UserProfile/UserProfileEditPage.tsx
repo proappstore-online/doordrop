@@ -110,7 +110,7 @@ const UserProfileEditPage: React.FC = () => {
       }
 
       if (userData.role === "walker") {
-        (dataToSave as any).walkerProfile = {
+        dataToSave.walkerProfile = {
           ...walkerProfile,
           serviceRadiusKm: Number(walkerProfile?.serviceRadiusKm ?? 0),
           ratePerDoor: walkerProfile?.ratePerDoor

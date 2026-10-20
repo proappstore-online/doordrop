@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/timestampToDate";
 import React, { useMemo } from "react";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import type { DoorData } from "../../models/door";
@@ -36,7 +37,7 @@ const DoorDetailPanel: React.FC<DoorDetailPanelProps> = ({
 
     if (door.history) {
       for (const event of door.history) {
-        const date = event.date instanceof Date ? event.date : new Date(event.date as any);
+        const date = toDate(event.date);
         const printout = event.printoutVersionId
           ? printouts.find((p) => p.id === event.printoutVersionId)
           : null;
@@ -51,7 +52,7 @@ const DoorDetailPanel: React.FC<DoorDetailPanelProps> = ({
 
     if (propertyReports) {
       for (const report of propertyReports) {
-        const date = report.reportedAt instanceof Date ? report.reportedAt : new Date(report.reportedAt as any);
+        const date = toDate(report.reportedAt);
         entries.push({
           date,
           type: "report",
@@ -132,7 +133,7 @@ const DoorDetailPanel: React.FC<DoorDetailPanelProps> = ({
             </div>
             {door.deliveredAt && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                Last delivered: <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(door.deliveredAt as any).toLocaleString()}</span>
+                Last delivered: <span className="font-medium text-gray-700 dark:text-gray-300">{toDate(door.deliveredAt).toLocaleString()}</span>
               </div>
             )}
           </div>

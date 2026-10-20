@@ -14,7 +14,7 @@ const QUOTA_EXCEEDED_BACKOFF_MS = 30 * 60_000; // Back off for 30 minutes on 429
 
 export function useUnreadMessages() {
   const { currentUser } = useAuthContext();
-  const app = useApp() as any;
+  const app = useApp();
   const [totalUnread, setTotalUnread] = useState(0);
 
   useEffect(() => {

@@ -32,8 +32,8 @@ const CampaignCommandHeader: React.FC<CampaignCommandHeaderProps> = ({
   if (!campaign.status) return null;
 
   const currentStageIndex = campaign.status ? LIFECYCLE_STAGES.indexOf(campaign.status) : -1;
-  const statusLabel = getCampaignStatusLabel(campaign.status as any);
-  const statusColors = getCampaignStatusBadgeColor(campaign.status as any);
+  const statusLabel = getCampaignStatusLabel(campaign.status);
+  const statusColors = getCampaignStatusBadgeColor(campaign.status);
 
   return (
     <header

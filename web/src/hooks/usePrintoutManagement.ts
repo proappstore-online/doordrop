@@ -98,7 +98,7 @@ export function usePrintoutManagement(
         const ext = printoutFile.name.split(".").pop() || "jpg";
         fileUrl = await uploadFile(`campaigns/${campaignId}/printouts/${Date.now()}.${ext}`, printoutFile);
       }
-      const printoutData: Record<string, any> = {
+      const printoutData: Omit<PrintoutData, "version"> = {
         name: printoutName.trim(),
         createdAt: new Date(),
         createdBy: currentUserId,
@@ -108,7 +108,7 @@ export function usePrintoutManagement(
       if (selectedFlyer) printoutData.flyerId = selectedFlyer.id;
 
       // Create the printout
-      const printoutId = await PrintoutRepository.createVersion(campaignId, printoutData as any);
+      const printoutId = await PrintoutRepository.createVersion(campaignId, printoutData);
       const updated = await PrintoutRepository.getVersions(campaignId);
       setPrintouts(updated);
 

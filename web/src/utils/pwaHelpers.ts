@@ -58,6 +58,9 @@ export async function releaseWakeLock() {
   }
 }
 
+// Background sync is not in the TypeScript DOM lib, so type the part we use.
+type SyncRegistration = ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } };
+
 /**
  * Request background sync permission
  */
@@ -65,7 +68,7 @@ export async function registerBackgroundSync(tag: string = 'sync-tracking-data')
   if ('serviceWorker' in navigator && 'sync' in ServiceWorkerRegistration.prototype) {
     try {
       const registration = await navigator.serviceWorker.ready;
-      await (registration as any).sync.register(tag);
+      await (registration as SyncRegistration).sync.register(tag);
       console.log('[PWA] Background sync registered:', tag);
       return true;
     } catch (error) {

@@ -121,7 +121,7 @@ export function useCampaignData(campaignId: string | undefined, currentUserId: s
 
   // Live doors via campaign room events with fallback polling on disconnect.
   // Door updates come via door.changed events published to campaign:{id} room.
-  const app = useApp() as any;
+  const app = useApp();
   useEffect(() => {
     if (!campaignId) return;
     let cancelled = false;

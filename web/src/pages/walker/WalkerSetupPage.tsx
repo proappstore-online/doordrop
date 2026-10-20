@@ -4,6 +4,7 @@ import { UserRepository } from "../../repositories/userRepository";
 import { PlatformConfigRepository } from "../../repositories/platformConfigRepository";
 import { useNavigate } from "react-router-dom";
 import { AU_STATE_CITY_MAP } from "../../data/countryData";
+import type { UserData } from "../../models/user";
 
 const AU_STATES = [...new Set(AU_STATE_CITY_MAP.map((item) => item.state))];
 
@@ -155,7 +156,7 @@ const WalkerSetupPage: React.FC = () => {
 
     setSaving(true);
     try {
-      const profile: Record<string, any> = {
+      const profile: NonNullable<UserData["walkerProfile"]> = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone.trim(),
@@ -190,10 +191,10 @@ const WalkerSetupPage: React.FC = () => {
       // Strip undefined values — Firestore rejects them
       const cleanProfile = Object.fromEntries(
         Object.entries(profile).filter(([, v]) => v !== undefined)
-      );
+      ) as typeof profile;
 
       await UserRepository.updateUser(currentUser.id, {
-        walkerProfile: cleanProfile as any,
+        walkerProfile: cleanProfile,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phoneNumber: phone.trim(),

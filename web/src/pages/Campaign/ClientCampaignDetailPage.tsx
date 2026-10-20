@@ -488,7 +488,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const activeDoorRadius = campaign.doorRadiusM ?? undefined;
 
   const nextActorRole: ActorRole = isAdmin ? (userData?.role === "admin" ? "platform_admin" : "campaign_admin") : "assigned_walker";
-  const availableActions = campaign?.status ? getNextActions(campaign.status as any, nextActorRole) : [];
+  const availableActions = campaign?.status ? getNextActions(campaign.status, nextActorRole) : [];
 
   // The editor's fields, shared by both places the details editor renders.
   const detailsEditorProps = {

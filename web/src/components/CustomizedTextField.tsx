@@ -73,7 +73,7 @@ const CustomizedTextField = React.forwardRef<
                 InputProps?.startAdornment ? "pl-10" : ""
               } ${InputProps?.endAdornment ? "pr-10" : ""}`}
               rows={rows}
-              {...(rest as any)}
+              {...(rest as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
             />
           ) : (
             <input

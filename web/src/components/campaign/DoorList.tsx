@@ -1,3 +1,4 @@
+import { toDate } from "../../utils/timestampToDate";
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { DoorData } from "../../models/door";
@@ -159,7 +160,7 @@ const DoorList: React.FC<DoorListProps> = ({
                             Delivery History ({door.history.length})
                           </div>
                           {door.history.map((event, idx) => {
-                            const eventDate = event.date instanceof Date ? event.date : new Date(event.date as any);
+                            const eventDate = toDate(event.date);
                             const printout = event.printoutVersionId
                               ? printouts.find((p) => p.id === event.printoutVersionId)
                               : null;
