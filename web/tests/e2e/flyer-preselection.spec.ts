@@ -92,16 +92,14 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
     await page.waitForSelector('text="Create a Campaign"');
 
     // Should start on location step (step 1)
-    const stepIndicator = page.locator('text="Location"');
-    await expect(stepIndicator).toBeVisible();
+    await expect(page.getByRole('progressbar', { name: /Step 1 of 5: Location/ })).toBeVisible();
 
     // Fill in location to move to next steps
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
-    await page.fill('input[maxlength="100"]', 'Parramatta');
-    await page.fill('input[inputMode="numeric"]', '2150');
+    await page.fill('#suburb', 'Parramatta');
+    await page.fill('#postcode', '2150');
 
     // Mock campaign creation
     await page.route('**/.pas/worker/v1/campaigns', async (route) => {
@@ -116,22 +114,16 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
     });
 
     // Continue to next step (delivery area)
-    await page.click('button:has-text("Continue")');
+    await page.getByRole('button', { name: 'Continue →' }).click();
 
     // Fill delivery area
-    await page.fill('input[inputMode="decimal"]', '100');
+    await page.fill('#delivery-radius', '1');
 
     // Continue to flyer step
-    await page.click('button:has-text("Continue")');
+    await page.getByRole('button', { name: 'Continue →' }).click();
 
-    // Verify flyer step shows the pre-selected flyer
-    await page.waitForSelector('text="Flyer selected"');
-    const selectedFlyer = page.locator('text="Flyer selected"');
-    await expect(selectedFlyer).toBeVisible();
-
-    // Verify the flyer ID is shown
-    const flyerConfirmation = page.locator('text="flyer-test-123"');
-    await expect(flyerConfirmation).toBeVisible();
+    // Verify flyer step shows the pre-selected flyer and its ID (the flyer step renders both in one line)
+    await expect(page.getByText('✓ Flyer selected (flyer-test-123)')).toBeVisible();
   });
 
   test('draft restores are not overwritten by flyerId query param', async ({ page }) => {
@@ -161,8 +153,8 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
     await page.waitForTimeout(500);
 
     // The selected flyer should be from the draft, not from the query param
-    const selectedFlyer = page.locator('text="flyer-from-draft"');
-    await expect(selectedFlyer).toBeVisible();
+    await expect(page.getByText('✓ Flyer selected (flyer-from-draft)')).toBeVisible();
+    await expect(page.getByText('flyer-different-123')).toHaveCount(0);
   });
 
   test('invalid or missing flyerId does not break campaign setup', async ({ page }) => {
@@ -182,18 +174,17 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
     await page.waitForSelector('text="Create a Campaign"');
 
     // Should still be usable - just without a pre-selected flyer
-    const createButton = page.locator('button:has-text("Continue")');
+    const createButton = page.getByRole('button', { name: 'Continue →' });
     await expect(createButton).toBeDisabled();
 
     // User should be able to fill in location and continue
-    const stateSelect = page.locator('input[placeholder="Select a state"]');
-    await stateSelect.click();
-    await page.getByText('NSW', { exact: true }).first().click();
+    await page.locator('[class*="-control"]').first().click();
+    await page.getByRole('option', { name: 'New South Wales' }).click();
 
-    await page.fill('input[maxlength="100"]', 'Parramatta');
-    await page.fill('input[inputMode="numeric"]', '2150');
+    await page.fill('#suburb', 'Parramatta');
+    await page.fill('#postcode', '2150');
 
     // Now continue button should be enabled
-    await expect(createButton).not.toBeDisabled();
+    await expect(createButton).toBeEnabled();
   });
 });
