@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from "react";
 import Select from "react-select";
 import { AU_STATE_CITY_MAP } from "../../../data/countryData";
 import type { CampaignData } from "../../../models/campaign";
@@ -9,12 +9,32 @@ interface LocationStepProps {
   isLoading?: boolean;
 }
 
+// Pause after the last keystroke before looking the address up, so typing doesn't send a request per character.
+const GEOCODE_DEBOUNCE_MS = 600;
+// Nominatim's usage policy allows at most one request per second.
+const NOMINATIM_MIN_INTERVAL_MS = 1000;
+
+// Identifies one address, so the same address is never looked up twice in a row.
+const addressKey = (suburb?: string, postcode?: string, state?: string) => `${suburb ?? ""}|${postcode ?? ""}|${state ?? ""}`;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading = false }) => {
   const [stateError, setStateError] = useState<string | null>(null);
   const [suburbError, setSuburbError] = useState<string | null>(null);
   const [postcodeError, setPostcodeError] = useState<string | null>(null);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
+
+  // Latest props, read by the geocode callback. Keeping them in a ref lets that callback stay stable
+  // instead of being recreated on every data change (each lookup calls onChange, which changes data).
+  const latestRef = useRef({ data, onChange, isLoading });
+  useLayoutEffect(() => {
+    latestRef.current = { data, onChange, isLoading };
+  });
+  const lastGeocodedKeyRef = useRef<string | null>(null);
+  const lastRequestAtRef = useRef(0);
+  const geocodeRunRef = useRef(0);
 
   const isDark = document.documentElement.classList.contains("dark");
 
@@ -39,13 +59,29 @@ const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading =
   };
 
   const geocodeLocation = useCallback(
-    async (suburb: string, postcode: string, state: string, maxRetries = 3) => {
+    async (key: string, suburb: string, postcode: string, state: string, maxRetries = 3) => {
+      const runId = ++geocodeRunRef.current;
+      // A result only counts if no newer lookup has started and the address on screen is still this one.
+      const isCurrent = () => {
+        const current = latestRef.current.data;
+        return runId === geocodeRunRef.current && addressKey(current.suburb, current.postcode, current.state) === key;
+      };
+
       setIsGeocoding(true);
       setGeocodeError(null);
 
+      let coordinates: { lat: number; lng: number } | null = null;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
+          // Keep at least one second between requests (Nominatim usage policy).
+          const wait = lastRequestAtRef.current + NOMINATIM_MIN_INTERVAL_MS - Date.now();
+          if (wait > 0) await sleep(wait);
+          if (!isCurrent()) break;
+          lastRequestAtRef.current = Date.now();
+
           const query = `${suburb}, ${postcode}, ${state}, Australia`;
+          // Browser fetch can't set a User-Agent, so Nominatim sees the browser's default. A meaningful
+          // User-Agent would need a server-side proxy; that is out of scope here.
           const response = await fetch(
             `https://nominatim.openstreetmap.org/search?` +
               new URLSearchParams({
@@ -66,46 +102,54 @@ const LocationStep: React.FC<LocationStepProps> = ({ data, onChange, isLoading =
           }
 
           const result = results[0];
-          onChange({
-            ...data,
-            lat: parseFloat(result.lat),
-            lng: parseFloat(result.lon),
-          });
-          setIsGeocoding(false);
-          return;
-        } catch (err) {
-          if (attempt === maxRetries - 1) {
-            // Last attempt failed
-            setGeocodeError(
-              "Could not verify location coordinates. You can still continue, but precise door matching may be affected."
-            );
-            onChange({ ...data, lat: undefined, lng: undefined });
-          } else {
-            // Wait before retrying with exponential backoff
-            await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-          }
+          coordinates = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+          break;
+        } catch {
+          // Last attempt failed: fall through to the failure handling below.
+          if (attempt === maxRetries - 1) break;
+          if (!isCurrent()) break;
+          // Wait before retrying with exponential backoff
+          await sleep(Math.pow(2, attempt) * 1000);
         }
       }
-      setIsGeocoding(false);
+
+      if (isCurrent()) {
+        const { data: current, onChange: notify } = latestRef.current;
+        if (coordinates) {
+          notify({ ...current, ...coordinates });
+        } else {
+          setGeocodeError(
+            "Could not verify location coordinates. You can still continue, but precise door matching may be affected."
+          );
+          notify({ ...current, lat: undefined, lng: undefined });
+        }
+      }
+      if (runId === geocodeRunRef.current) setIsGeocoding(false);
     },
-    [data, onChange]
+    []
   );
 
-  // Auto-geocode when location is valid
+  // Auto-geocode once per distinct address. Depends only on the address fields (plus isLoading, so a
+  // lookup skipped while creating resumes afterwards; the dedupe key stops it repeating an address).
+  // It does not re-run on error-state updates, on isGeocoding changes, or on the lat/lng that
+  // geocoding writes back.
   useEffect(() => {
-    if (
-      !isGeocoding &&
-      !isLoading &&
-      data.state &&
-      data.suburb &&
-      data.postcode &&
-      !stateError &&
-      !suburbError &&
-      !postcodeError
-    ) {
-      void geocodeLocation(data.suburb, data.postcode, data.state);
+    const { suburb, postcode, state } = data;
+    if (isLoading || !suburb || !postcode || !state || validateSuburb(suburb) || validatePostcode(postcode)) {
+      return;
     }
-  }, [data.state, data.suburb, data.postcode, stateError, suburbError, postcodeError, isGeocoding, isLoading, geocodeLocation]);
+
+    const key = addressKey(suburb, postcode, state);
+    if (key === lastGeocodedKeyRef.current) return;
+
+    // Debounced: typing restarts the timer, so only the address the user settles on is looked up.
+    const timer = setTimeout(() => {
+      // Set before the request so a failed lookup isn't retried for the same address; a new address still is.
+      lastGeocodedKeyRef.current = key;
+      void geocodeLocation(key, suburb, postcode, state);
+    }, GEOCODE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [data.suburb, data.postcode, data.state, isLoading, geocodeLocation]);
 
   const handleStateChange = (option: { value: string; label: string } | null) => {
     const nextState = option?.value || "";
