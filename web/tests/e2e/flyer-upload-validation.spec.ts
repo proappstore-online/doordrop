@@ -144,7 +144,7 @@ test.describe('Flyer upload validation (Epic #32)', () => {
     await submitButton.click();
 
     // Assert error message appears
-    await expect(page.locator('text=Invalid file type. Please upload a PDF, PNG, or JPG.')).toBeVisible();
+    await expect(page.locator('text=Invalid file type. Please upload a JPG, PNG, WebP, GIF or PDF.')).toBeVisible();
   });
 
   test('accepts valid PNG file', async ({ page }) => {

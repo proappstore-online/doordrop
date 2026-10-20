@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { FlyerRepository, type FlyerWithId } from "../../../repositories/flyerRepository";
 import { PrintoutRepository } from "../../../repositories/printoutRepository";
 import { uploadFile as uploadFlyer } from "../../../utils/storageUpload";
+import { FLYER_ACCEPTED_EXTENSIONS, FLYER_MAX_SIZE_MB, validateFlyerFile } from "../../../utils/flyerValidator";
 import type { CampaignData } from "../../../models/campaign";
 
 interface FlyerStepProps {
@@ -109,21 +110,6 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, ca
     setError(null);
   };
 
-  const validateFile = (file: File): string | null => {
-    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-    const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg"];
-
-    if (file.size > MAX_SIZE) {
-      return "File too large. Maximum size is 10 MB.";
-    }
-
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      return "Invalid file type. Please upload a PDF, PNG, or JPG.";
-    }
-
-    return null;
-  };
-
   const handleUploadFlyer = async () => {
     if (!uploadName.trim()) {
       setError("Flyer name is required");
@@ -134,7 +120,7 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, ca
       return;
     }
 
-    const validationError = validateFile(uploadFile);
+    const validationError = validateFlyerFile(uploadFile);
     if (validationError) {
       setError(validationError);
       return;
@@ -322,12 +308,12 @@ const FlyerStep: React.FC<FlyerStepProps> = ({ data, onChange, currentUserId, ca
             <input
               id="upload-file"
               type="file"
-              accept="application/pdf,image/png,image/jpeg"
+              accept={FLYER_ACCEPTED_EXTENSIONS}
               onChange={handleUploadFile}
               disabled={uploadSaving}
               className="text-sm text-gray-600 dark:text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/30 dark:file:text-blue-300 hover:file:bg-blue-100 disabled:opacity-50"
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">PDF, PNG or JPG · max 10 MB</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">JPG, PNG, WebP, GIF or PDF · max {FLYER_MAX_SIZE_MB} MB</p>
           </div>
 
           <div className="flex gap-2 border-t pt-3">
