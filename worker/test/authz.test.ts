@@ -322,6 +322,80 @@ describe('a walker cannot see or act on another walker\'s assignment', () => {
   });
 });
 
+// #85: a walker sees the campaigns they're assigned to and open ones, not another walker's assignment.
+describe('walker isolation: campaigns, profiles, reviews and status (#85)', () => {
+  it('walker A cannot list or open walker B\'s assigned campaign, through the worker', async () => {
+    const list = await req(WALKER_2, 'GET', '/v1/campaigns');
+    expect(list.status).toBe(200);
+    expect(list.body.map((c: any) => c.id)).not.toContain(campaignId);
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns/${campaignId}`)).status).toBe(403);
+    // A walker can't ask for another walker's campaigns
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns?walkerId=${WALKER_1}`)).status).toBe(403);
+    // The assigned walker still sees its own
+    expect((await req(WALKER_1, 'GET', '/v1/campaigns')).body.map((c: any) => c.id)).toEqual([campaignId]);
+  });
+
+  it('walker A cannot list or open walker B\'s assigned campaign straight at the actions', async () => {
+    expect((await direct(WALKER_2, 'list_campaigns', {})).rows.map((r: any) => r.id)).not.toContain(campaignId);
+    expect((await direct(WALKER_2, 'get_campaign', { id: campaignId })).rows).toEqual([]);
+    // campaign_access still answers "not a participant" (so the worker says 403), but withholds the name and assignee
+    expect((await direct(WALKER_2, 'campaign_access', { id: campaignId })).rows[0])
+      .toMatchObject({ name: null, assigned_walker_id: null, is_walker: 0, is_admin: 0 });
+    expect((await direct(WALKER_1, 'campaign_access', { id: campaignId })).rows[0])
+      .toMatchObject({ name: 'Elm St drop', assigned_walker_id: WALKER_1, is_walker: 1 });
+  });
+
+  it('a walker can read an open campaign, and loses it once a walker is assigned', async () => {
+    const openId = (await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Open St drop' })).body.id;
+    expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${openId}`, { status: 'ready' })).status).toBe(200);
+
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns/${openId}`)).status).toBe(200);
+    expect((await req(WALKER_2, 'GET', '/v1/campaigns?status=ready,assigned')).body.map((c: any) => c.id)).toContain(openId);
+    expect((await direct(WALKER_2, 'get_campaign', { id: openId })).rows).toHaveLength(1);
+    // A client with no part in it cannot read it
+    expect((await req(CLIENT_2, 'GET', `/v1/campaigns/${openId}`)).status).toBe(403);
+
+    // Assigned to walker 1: walker 2 loses it
+    db.prepare("INSERT INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) VALUES ('interest-open', ?, ?, 0, 0)").run(WALKER_1, openId);
+    expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${openId}`, { assigned_walker_id: WALKER_1, status: 'assigned' })).status).toBe(200);
+    expect((await req(WALKER_2, 'GET', `/v1/campaigns/${openId}`)).status).toBe(403);
+    expect((await direct(WALKER_2, 'get_campaign', { id: openId })).rows).toEqual([]);
+    expect((await req(WALKER_2, 'GET', '/v1/campaigns?status=ready,assigned')).body.map((c: any) => c.id)).not.toContain(openId);
+  });
+
+  it('a walker cannot read another walker\'s profile unless they share a campaign; their own is theirs', async () => {
+    // Walker 2 shares no campaign with walker 1
+    expect((await req(WALKER_2, 'GET', `/v1/users/${WALKER_1}`)).status).toBe(404);
+    expect((await direct(WALKER_2, 'get_user', { id: WALKER_1 })).rows).toEqual([]);
+    expect((await req(WALKER_2, 'GET', `/v1/users/${WALKER_2}`)).status).toBe(200);
+
+    // The campaign's admin and its assigned walker can read each other
+    expect((await req(CLIENT_1, 'GET', `/v1/users/${WALKER_1}`)).status).toBe(200);
+    expect((await req(WALKER_1, 'GET', `/v1/users/${CLIENT_1}`)).status).toBe(200);
+
+    // A walker interested in the campaign can read its admin, but still not the assigned walker
+    db.prepare("INSERT INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) VALUES ('interest-w2', ?, ?, 0, 0)").run(WALKER_2, campaignId);
+    expect((await req(WALKER_2, 'GET', `/v1/users/${CLIENT_1}`)).status).toBe(200);
+    expect((await req(WALKER_2, 'GET', `/v1/users/${WALKER_1}`)).status).toBe(404);
+  });
+
+  it('campaign status is for the campaign\'s admin and assigned walker only', async () => {
+    expect((await direct(WALKER_2, 'get_campaign_status', { id: campaignId })).rows).toEqual([]);
+    expect((await direct(WALKER_1, 'get_campaign_status', { id: campaignId })).rows).toEqual([{ status: 'assigned' }]);
+    expect((await direct(CLIENT_1, 'get_campaign_status', { id: campaignId })).rows).toEqual([{ status: 'assigned' }]);
+  });
+
+  it('reviews are public, and do not expose the campaign the walker was booked on', async () => {
+    expect((await req(CLIENT_1, 'POST', `/v1/walkers/${WALKER_1}/reviews`, { rating: 4, comment: 'on time', campaignId })).status).toBe(201);
+    const [review] = (await req(CLIENT_2, 'GET', `/v1/walkers/${WALKER_1}/reviews`)).body;
+    expect(review).toMatchObject({ rating: 4, comment: 'on time', reviewer_id: CLIENT_1 });
+    expect(review).not.toHaveProperty('campaign_id');
+
+    const [direct1] = (await direct(CLIENT_2, 'list_walker_reviews', { walker_id: WALKER_1 })).rows;
+    expect(direct1).not.toHaveProperty('campaign_id');
+  });
+});
+
 describe('unread message badge summary', () => {
   it('returns one caller-scoped count instead of one query per campaign', async () => {
     db.prepare("INSERT INTO campaign_notes (id, campaign_id, user_id, user_name, text, created_at) VALUES ('n1', ?, ?, 'C1', 'new', 100)").run(campaignId, CLIENT_1);
