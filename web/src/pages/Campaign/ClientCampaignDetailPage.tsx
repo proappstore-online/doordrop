@@ -1,53 +1,38 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { useApp } from "@proappstore/sdk";
 import { CampaignRepository } from "../../repositories/campaignRepository";
 import { DoorRepository } from "../../repositories/doorRepository";
 import { useAuthContext } from "../../hooks/useAuthContext";
 import { useUserData } from "../../hooks/useUserData";
 import { UserRepository } from "../../repositories/userRepository";
-import type { CampaignData, CampaignStatus, TrackPoint, TrackStop } from "../../models/campaign";
+import type { CampaignData, CampaignStatus } from "../../models/campaign";
 import { isCampaignClosed, getNextActions, type ActorRole } from "../../models/campaign";
 import type { DoorData, DeliveryEvent } from "../../models/door";
 import CampaignMap from "../../components/campaign/CampaignMap";
 import DoorReportModal from "../../components/campaign/DoorReportModal";
-import CampaignDetailsEditor from "../../components/campaign/CampaignDetailsEditor";
 import PrintoutManager from "../../components/campaign/PrintoutManager";
 import WalkerInterestPanel from "../../components/campaign/WalkerInterestPanel";
-import DeliveryTrackingPanel from "../../components/campaign/DeliveryTrackingPanel";
 import CampaignStats from "../../components/campaign/CampaignStats";
 import AssignedWalkerCard from "../../components/campaign/AssignedWalkerCard";
-import DoorList from "../../components/campaign/DoorList";
-import AddressSelectionPanel from "../../components/campaign/AddressSelectionPanel";
 import PublishReadinessModal from "../../components/campaign/PublishReadinessModal";
 import CampaignCommandHeader from "../../components/campaign/CampaignCommandHeader";
 import CampaignExceptionBanner from "../../components/campaign/CampaignExceptionBanner";
 import CampaignFlyerPanel from "../../components/campaign/CampaignFlyerPanel";
 import PrintoutSelector from "../../components/campaign/PrintoutSelector";
-import ReviewForm from "../../components/reviews/ReviewForm";
-import ReviewPrompt from "../../components/reviews/ReviewPrompt";
+import MutationErrorBanner from "../../components/campaign/clientDetail/MutationErrorBanner";
+import CampaignDetailsSection from "../../components/campaign/clientDetail/CampaignDetailsSection";
+import WalkerTrackingSection from "../../components/campaign/clientDetail/WalkerTrackingSection";
+import DoorManagementPanels from "../../components/campaign/clientDetail/DoorManagementPanels";
+import { DraftFlyerNotices, ActiveFlyerCard } from "../../components/campaign/clientDetail/ActiveFlyerCards";
+import ReviewSection from "../../components/campaign/clientDetail/ReviewSection";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
 import Notes from "../UserInfoPage/Dashboard/Notes";
 import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
 import { useCampaignData } from "../../hooks/useCampaignData";
+import { useCampaignTrackSessions } from "../../hooks/useCampaignTrackSessions";
 import { useDoorManagement } from "../../hooks/useDoorManagement";
 import { usePrintoutManagement } from "../../hooks/usePrintoutManagement";
 import { useWalkerInterest } from "../../hooks/useWalkerInterest";
-import { apiGet } from "../../lib/api";
-
-const TRACK_SESSIONS_POLL_MS = 10_000;
-
-interface TrackSessionListRow {
-  id: string;
-  walker_id: string;
-  started_at: number;
-  ended_at: number | null;
-}
-
-interface TrackSessionDetail extends TrackSessionListRow {
-  points: TrackPoint[];
-  stops: { lat: number; lng: number; startTime: number; endTime: number }[];
-}
 
 const ClientCampaignDetailPage: React.FC = () => {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -100,8 +85,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const [noteLoading, setNoteLoading] = useState(false);
 
   // Aggregated track data from polling the worker (replaces Firestore onSnapshot).
-  const [polledTrackPoints, setPolledTrackPoints] = useState<TrackPoint[]>([]);
-  const [polledTrackStops, setPolledTrackStops] = useState<TrackStop[]>([]);
+  const { polledTrackPoints, polledTrackStops } = useCampaignTrackSessions(campaignId);
 
   const isAdmin = campaign?.adminIds?.includes(currentUser?.id || "") || false;
   const isAssignedWalker = campaign?.assignedWalkerId === currentUser?.id;
@@ -152,93 +136,6 @@ const ClientCampaignDetailPage: React.FC = () => {
       setEditPropertyFilter(campaign.propertyFilter ?? "all");
     }
   }, [campaign]);
-
-  // Real-time track sessions via fas.rooms with fallback polling.
-  // Aggregates points + stops from sessions started in the last 24h.
-  const app = useApp() as any;
-  useEffect(() => {
-    if (!campaignId) return;
-    let cancelled = false;
-    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
-
-    const fetchAggregated = async () => {
-      if (cancelled) return;
-      try {
-        const sessions = await apiGet<TrackSessionListRow[]>(
-          `/v1/campaigns/${campaignId}/track-sessions`,
-        );
-        const oneDayAgo = Math.floor(Date.now() / 1000) - 86_400;
-        const recent = sessions.filter((s) => s.started_at >= oneDayAgo);
-        if (recent.length === 0) {
-          if (!cancelled) {
-            setPolledTrackPoints([]);
-            setPolledTrackStops([]);
-          }
-          return;
-        }
-        const details = await Promise.all(
-          recent.map((s) => apiGet<TrackSessionDetail>(`/v1/track-sessions/${s.id}`).catch(() => null)),
-        );
-        const allPoints: TrackPoint[] = [];
-        const allStops: TrackStop[] = [];
-        for (const d of details) {
-          if (!d) continue;
-          if (Array.isArray(d.points)) allPoints.push(...d.points);
-          if (Array.isArray(d.stops)) {
-            for (const s of d.stops) {
-              allStops.push({ lat: s.lat, lng: s.lng, startTime: s.startTime, endTime: s.endTime });
-            }
-          }
-        }
-        allPoints.sort((a, b) => a.t - b.t);
-        allStops.sort((a, b) => a.startTime - b.startTime);
-        if (!cancelled) {
-          setPolledTrackPoints(allPoints);
-          setPolledTrackStops(allStops);
-        }
-      } catch {
-        /* swallow — next tick retries */
-      }
-    };
-
-    const room = app?.rooms?.join(`campaign:${campaignId}`);
-    if (room) {
-      // Listen to tracking.changed events only
-      room.onEvent((event: any) => {
-        if (event.data?.type === 'tracking.changed' && event.data?.campaignId === campaignId) {
-          void fetchAggregated();
-        }
-      });
-      room.onReconnect(() => {
-        void fetchAggregated();
-      });
-      room.onConnectionState((state: string) => {
-        if (state === 'closed' || state === 'error') {
-          if (!fallbackInterval) {
-            fallbackInterval = setInterval(() => void fetchAggregated(), TRACK_SESSIONS_POLL_MS);
-          }
-        } else {
-          if (fallbackInterval) {
-            clearInterval(fallbackInterval);
-            fallbackInterval = null;
-          }
-        }
-      });
-      void fetchAggregated();
-      return () => {
-        cancelled = true;
-        room.close();
-        if (fallbackInterval) clearInterval(fallbackInterval);
-      };
-    } else {
-      void fetchAggregated();
-      fallbackInterval = setInterval(() => void fetchAggregated(), TRACK_SESSIONS_POLL_MS);
-      return () => {
-        cancelled = true;
-        if (fallbackInterval) clearInterval(fallbackInterval);
-      };
-    }
-  }, [campaignId, app]);
 
   useEffect(() => {
     if (!campaignId) return;
@@ -593,39 +490,52 @@ const ClientCampaignDetailPage: React.FC = () => {
   const nextActorRole: ActorRole = isAdmin ? (userData?.role === "admin" ? "platform_admin" : "campaign_admin") : "assigned_walker";
   const availableActions = campaign?.status ? getNextActions(campaign.status as any, nextActorRole) : [];
 
+  // The editor's fields, shared by both places the details editor renders.
+  const detailsEditorProps = {
+    campaign,
+    statusUpdating,
+    isPublishing,
+    budget: editBudget,
+    dueDate: editDueDate,
+    doorRadius: editDoorRadius,
+    junkMailPolicy: editJunkMailPolicy,
+    propertyFilter: editPropertyFilter,
+    doorCount: doors.length,
+    saving: savingDetails,
+    onBudgetChange: setEditBudget,
+    onDueDateChange: setEditDueDate,
+    onDoorRadiusChange: setEditDoorRadius,
+    onJunkMailPolicyChange: setEditJunkMailPolicy,
+    onPropertyFilterChange: setEditPropertyFilter,
+    onSave: handleSaveDetails,
+    onPublish: handlePublish,
+  };
+
+  // The walker tracking panel's props, shared by both places it renders.
+  const walkerTrackingProps = {
+    campaign,
+    trackingState,
+    geoError,
+    walkerPosition,
+    elapsedMinutes,
+    distanceKm,
+    debugInfo: trackingDebugInfo,
+    isAdmin: isAdmin || false,
+    doors,
+    campaignId,
+    currentUserId: currentUser?.id,
+    onStartTracking: startTracking,
+    onStopTracking: handleStopTracking,
+    onDismissError: dismissError,
+    onDoorVisited: handleDoorVisited,
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-7xl mx-auto p-4 space-y-6">
         {/* Global error */}
         {mutationError && (
-          <div
-            role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200"
-          >
-            <div className="flex gap-3">
-              <svg
-                className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <div className="flex-1">
-                <p>{mutationError}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMutationError(null)}
-                className="flex-shrink-0 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+          <MutationErrorBanner message={mutationError} onDismiss={() => setMutationError(null)} />
         )}
 
         {/* Command Header */}
@@ -677,32 +587,7 @@ const ClientCampaignDetailPage: React.FC = () => {
             ) : campaign.status === "draft" || campaign.status === "ready" ? (
               /* Draft/Ready: Show Details Editor */
               isAdmin ? (
-                <CampaignDetailsEditor
-                  budget={editBudget}
-                  dueDate={editDueDate}
-                  doorRadius={editDoorRadius}
-                  junkMailPolicy={editJunkMailPolicy}
-                  propertyFilter={editPropertyFilter}
-                  doorCount={doors.length}
-                  saving={savingDetails}
-                  onBudgetChange={setEditBudget}
-                  onDueDateChange={setEditDueDate}
-                  onDoorRadiusChange={setEditDoorRadius}
-                  onJunkMailPolicyChange={setEditJunkMailPolicy}
-                  onPropertyFilterChange={setEditPropertyFilter}
-                  onSave={handleSaveDetails}
-                  onPublish={handlePublish}
-                  publishDisabled={
-                    statusUpdating ||
-                    isPublishing ||
-                    doors.length === 0 ||
-                    !campaign?.activePrintoutId ||
-                    !campaign?.doorRadiusM ||
-                    campaign.doorRadiusM <= 0 ||
-                    !campaign?.suburb ||
-                    !campaign?.postcode
-                  }
-                />
+                <CampaignDetailsSection {...detailsEditorProps} />
               ) : null
             ) : campaign.status === "complete" || campaign.status === "review" || campaign.status === "payment" ? (
               /* Closed Campaigns: Show Stats */
@@ -728,27 +613,7 @@ const ClientCampaignDetailPage: React.FC = () => {
             ) : null}
 
             {/* Delivery Tracking Panel for Assigned Walker */}
-            {isAssignedWalker && !campaignClosed && (
-              <DeliveryTrackingPanel
-                trackingState={trackingState}
-                doorRadiusM={campaign.doorRadiusM || 100}
-                junkMailPolicy={campaign.junkMailPolicy}
-                propertyFilter={campaign.propertyFilter}
-                geoError={geoError}
-                walkerPosition={walkerPosition}
-                elapsedMinutes={elapsedMinutes}
-                distanceKm={distanceKm}
-                debugInfo={trackingDebugInfo}
-                isAdmin={isAdmin || false}
-                doors={doors}
-                campaignId={campaignId}
-                currentUserId={currentUser?.id}
-                onStartTracking={startTracking}
-                onStopTracking={handleStopTracking}
-                onDismissError={dismissError}
-                onDoorVisited={handleDoorVisited}
-              />
-            )}
+            {isAssignedWalker && !campaignClosed && <WalkerTrackingSection {...walkerTrackingProps} />}
           </div>
 
           {/* Secondary Content Area - Right Sidebar */}
@@ -814,23 +679,11 @@ const ClientCampaignDetailPage: React.FC = () => {
               />
             </div>
             <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
-              <AddressSelectionPanel
-                suburb={campaign.suburb || ""}
-                postcode={campaign.postcode || ""}
-                state={campaign.state || ""}
-                currentStreet={doorManagement.currentStreet}
-                availableAddresses={doorManagement.availableAddresses}
-                selectedDoorKeys={doorManagement.selectedDoorKeys}
-                overpassLoading={doorManagement.overpassLoading}
-                overpassError={doorManagement.overpassError}
-                manualOpen={doorManagement.manualOpen}
-                onStreetSelected={doorManagement.handleStreetSelected}
-                onToggleAddress={doorManagement.toggleAddress}
-                onToggleManual={() => doorManagement.setManualOpen(!doorManagement.manualOpen)}
-                onDoorsGenerated={doorManagement.handleDoorsGenerated}
-              />
-              <DoorList
+              <DoorManagementPanels
                 campaignId={campaignId!}
+                campaign={campaign}
+                doorManagement={doorManagement}
+                showAddressSelection
                 doorsByStreet={doorsByStreet}
                 expandedStreets={expandedStreets}
                 expandedDoorId={expandedDoorId}
@@ -879,29 +732,23 @@ const ClientCampaignDetailPage: React.FC = () => {
           reviewCheckDone &&
           (campaign.status === "complete" || campaign.status === "review") &&
           campaign.assignedWalkerId &&
-          !hasReviewed &&
-          (showReviewForm ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-              <ReviewForm
-                walkerId={campaign.assignedWalkerId}
-                reviewerId={currentUser?.id || ""}
-                reviewerName={userData?.name}
-                campaignId={campaignId!}
-                scheduleId={campaignId}
-                onSubmitted={() => {
-                  setShowReviewForm(false);
-                  setHasReviewed(true);
-                }}
-                onCancel={() => setShowReviewForm(false)}
-              />
-            </div>
-          ) : (
-            <ReviewPrompt
-              onRateNow={() => setShowReviewForm(true)}
-              completedDate={campaign.completedAt ? new Date(campaign.completedAt).toLocaleDateString() : undefined}
+          !hasReviewed && (
+            <ReviewSection
+              walkerId={campaign.assignedWalkerId}
               walkerName={assignedWalkerName}
+              reviewerId={currentUser?.id || ""}
+              reviewerName={userData?.name}
+              campaignId={campaignId!}
+              completedDate={campaign.completedAt ? new Date(campaign.completedAt).toLocaleDateString() : undefined}
+              showForm={showReviewForm}
+              onRateNow={() => setShowReviewForm(true)}
+              onSubmitted={() => {
+                setShowReviewForm(false);
+                setHasReviewed(true);
+              }}
+              onCancel={() => setShowReviewForm(false)}
             />
-          ))}
+          )}
 
         {/* Notes Section */}
         {(isAdmin || isAssignedWalker) && (
@@ -917,56 +764,9 @@ const ClientCampaignDetailPage: React.FC = () => {
 
         {/* Publish Modal */}
 
-      {isAssignedWalker && !campaignClosed && (
-        <DeliveryTrackingPanel
-          trackingState={trackingState}
-          doorRadiusM={campaign.doorRadiusM || 100}
-          junkMailPolicy={campaign.junkMailPolicy}
-          propertyFilter={campaign.propertyFilter}
-          geoError={geoError}
-          walkerPosition={walkerPosition}
-          elapsedMinutes={elapsedMinutes}
-          distanceKm={distanceKm}
-          debugInfo={trackingDebugInfo}
-          isAdmin={isAdmin || false}
-          doors={doors}
-          campaignId={campaignId}
-          currentUserId={currentUser?.id}
-          onStartTracking={startTracking}
-          onStopTracking={handleStopTracking}
-          onDismissError={dismissError}
-          onDoorVisited={handleDoorVisited}
-        />
-      )}
+      {isAssignedWalker && !campaignClosed && <WalkerTrackingSection {...walkerTrackingProps} />}
 
-      {isAdmin && campaign.status === "draft" && (
-        <CampaignDetailsEditor
-          budget={editBudget}
-          dueDate={editDueDate}
-          doorRadius={editDoorRadius}
-          junkMailPolicy={editJunkMailPolicy}
-          propertyFilter={editPropertyFilter}
-          doorCount={doors.length}
-          saving={savingDetails}
-          onBudgetChange={setEditBudget}
-          onDueDateChange={setEditDueDate}
-          onDoorRadiusChange={setEditDoorRadius}
-          onJunkMailPolicyChange={setEditJunkMailPolicy}
-          onPropertyFilterChange={setEditPropertyFilter}
-          onSave={handleSaveDetails}
-          onPublish={handlePublish}
-          publishDisabled={
-            statusUpdating ||
-            isPublishing ||
-            doors.length === 0 ||
-            !campaign?.activePrintoutId ||
-            !campaign?.doorRadiusM ||
-            campaign.doorRadiusM <= 0 ||
-            !campaign?.suburb ||
-            !campaign?.postcode
-          }
-        />
-      )}
+      {isAdmin && campaign.status === "draft" && <CampaignDetailsSection {...detailsEditorProps} />}
 
       {campaign.status !== "draft" && (
         <CampaignStats
@@ -979,87 +779,12 @@ const ClientCampaignDetailPage: React.FC = () => {
 
       {/* Issue #21: Active flyer visibility and empty states */}
       {isAdmin && campaign.status === "draft" && (
-        <>
-          {/* Active Flyer Display - show what walkers will see */}
-          {activePrintoutId && printouts.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-900/20">
-              <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-3">Active Flyer</h3>
-              {(() => {
-                const activePrintout = printouts.find((p) => p.id === activePrintoutId);
-                if (!activePrintout) return null;
-                return (
-                  <div className="flex items-center gap-3">
-                    {activePrintout.fileUrl && (
-                      <img src={activePrintout.fileUrl} alt={activePrintout.name} className="h-16 w-16 rounded object-cover flex-shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-medium text-emerald-900 dark:text-emerald-100">{activePrintout.name}</p>
-                      <p className="text-sm text-emerald-800 dark:text-emerald-200">This is what walkers will deliver</p>
-                      {activePrintout.flyerId && (
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300">From your flyer library</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Empty state: no printouts yet */}
-          {printouts.length === 0 && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/60 rounded-lg p-4">
-              <div className="flex gap-3">
-                <svg className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zm-11-1a1 1 0 11-2 0 1 1 0 012 0zm3 0a1 1 0 11-2 0 1 1 0 012 0zm3 0a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">No flyer selected</p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">Walkers won't see anything to deliver. Upload a flyer or select one from your library to get started.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Warning: printouts exist but no active flyer */}
-          {printouts.length > 0 && !activePrintoutId && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/60 rounded-lg p-4">
-              <div className="flex gap-3">
-                <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">No active flyer set</p>
-                  <p className="text-sm text-amber-800 dark:text-amber-200">Please select one of your flyers above before publishing. You won't be able to publish without an active flyer.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </>
+        <DraftFlyerNotices printouts={printouts} activePrintoutId={activePrintoutId} />
       )}
 
       {/* Show active flyer display to all users (not just admin) in non-draft status */}
       {activePrintoutId && printouts.length > 0 && campaign.status !== "draft" && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Flyer for This Campaign</h3>
-          {(() => {
-            const activePrintout = printouts.find((p) => p.id === activePrintoutId);
-            if (!activePrintout) return null;
-            return (
-              <div className="flex items-center gap-3">
-                {activePrintout.fileUrl && (
-                  <img src={activePrintout.fileUrl} alt={activePrintout.name} className="h-16 w-16 rounded object-cover flex-shrink-0" />
-                )}
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{activePrintout.name}</p>
-                  {activePrintout.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{activePrintout.description}</p>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
+        <ActiveFlyerCard printouts={printouts} activePrintoutId={activePrintoutId} />
       )}
 
       <div className="flex flex-col lg:flex-row gap-4">
@@ -1079,26 +804,11 @@ const ClientCampaignDetailPage: React.FC = () => {
         />
 
         <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
-          {isAdmin && campaign.status === "draft" && (
-            <AddressSelectionPanel
-              suburb={campaign.suburb || ""}
-              postcode={campaign.postcode || ""}
-              state={campaign.state || ""}
-              currentStreet={doorManagement.currentStreet}
-              availableAddresses={doorManagement.availableAddresses}
-              selectedDoorKeys={doorManagement.selectedDoorKeys}
-              overpassLoading={doorManagement.overpassLoading}
-              overpassError={doorManagement.overpassError}
-              manualOpen={doorManagement.manualOpen}
-              onStreetSelected={doorManagement.handleStreetSelected}
-              onToggleAddress={doorManagement.toggleAddress}
-              onToggleManual={() => doorManagement.setManualOpen(!doorManagement.manualOpen)}
-              onDoorsGenerated={doorManagement.handleDoorsGenerated}
-            />
-          )}
-
-          <DoorList
+          <DoorManagementPanels
             campaignId={campaignId!}
+            campaign={campaign}
+            doorManagement={doorManagement}
+            showAddressSelection={isAdmin && campaign.status === "draft"}
             doorsByStreet={doorsByStreet}
             expandedStreets={expandedStreets}
             expandedDoorId={expandedDoorId}
