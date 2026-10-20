@@ -59,17 +59,6 @@ export async function releaseWakeLock() {
 }
 
 /**
- * Check if app is installed as PWA
- */
-export function isPWA(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true ||
-    document.referrer.includes('android-app://')
-  );
-}
-
-/**
  * Request background sync permission
  */
 export async function registerBackgroundSync(tag: string = 'sync-tracking-data') {

@@ -119,9 +119,3 @@ export function useActiveCampaignTracking(campaignIds: string[]) {
 
   return activeCampaigns;
 }
-
-export function useCampaignTracking(campaignId: string | undefined) {
-  const ids = campaignId ? [campaignId] : [];
-  const activeCampaigns = useActiveCampaignTracking(ids);
-  return campaignId ? activeCampaigns.has(campaignId) : false;
-}
