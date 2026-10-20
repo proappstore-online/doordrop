@@ -6,19 +6,20 @@ test.describe('Login page', () => {
 
     // Wait for the SDK + React to settle, then for the signed-out button.
     // The SDK's auth.init() is a no-op on a normal load, so this is fast.
-    const signIn = page.getByRole('button', { name: /sign in with github/i });
+    const signIn = page.getByRole('button', { name: /continue with github/i });
     await expect(signIn).toBeVisible({ timeout: 15_000 });
 
-    // Clicking initiates a redirect to FAS's hosted OAuth start URL.
-    // We don't want to actually hit GitHub from CI, so intercept it.
+    // The app runs in platform-cookie auth mode, so clicking redirects to the same-origin
+    // /.pas/auth/start endpoint with the provider. Intercept it so CI never reaches GitHub.
     const oauthRequest = page.waitForRequest(
-      (req) => req.url().includes('api.freeappstore.online') && req.url().includes('/v1/auth/'),
+      (req) => new URL(req.url()).pathname === '/.pas/auth/start',
       { timeout: 5_000 },
     );
 
     await signIn.click();
     const req = await oauthRequest;
-    expect(req.url()).toMatch(/api\.freeappstore\.online/);
+    const oauthUrl = new URL(req.url());
+    expect(oauthUrl.searchParams.get('provider')).toBe('github');
   });
 
   // TODO: refine selectors + add mock for the SDK's first-call probe so this
