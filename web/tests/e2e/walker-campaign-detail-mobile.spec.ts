@@ -77,15 +77,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
     // Navigate to a campaign detail page (assumes test campaign exists)
     await page.goto("/walker/campaign/test-campaign-id");
 
-    // Wait for campaign to load
-    await page.waitForSelector("text=Loading campaign").then(async () => {
-      // Wait for actual content
-      await page.waitForTimeout(1000);
-    }).catch(() => {
-      // If loading text not found, content is already loaded
-    });
-
-    // Check for campaign name in header
+    // Wait directly for the campaign heading, which renders once the campaign has loaded
     const heading = page.locator("h1").first();
     await expect(heading).toBeVisible();
 
