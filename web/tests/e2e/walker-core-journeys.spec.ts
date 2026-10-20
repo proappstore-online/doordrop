@@ -94,21 +94,12 @@ test.describe('Walker Core Journeys', () => {
   test('campaign cards display fit-decision data (doors, pay, due, radius, flyer)', async ({ page }) => {
     await page.goto('/walker/campaigns');
 
-    // Wait for first campaign card to be available
+    // Wait for the first campaign card to render before checking its stats
     const campaignCard = page.locator('[class*="rounded-lg"][class*="shadow"]').first();
+    await expect(campaignCard).toBeVisible();
 
-    // Try to find stats we expect from #57 (campaign discovery redesign)
-    const hasDoorsInfo = await page.locator('text=Doors').count() > 0;
-    const hasPayInfo = await page.locator('text=Pay').count() > 0;
-    const hasDueInfo = await page.locator('text=Due').count() > 0;
-    const hasRadiusInfo = await page.locator('text=Radius').count() > 0;
-    const hasFlyerInfo = await page.locator('text=Flyer').count() > 0;
-
-    // At least some stats should be visible on available campaigns
-    const statsPresent = hasDoorsInfo || hasPayInfo || hasDueInfo || hasRadiusInfo || hasFlyerInfo;
-    if (await campaignCard.isVisible()) {
-      expect(statsPresent).toBe(true);
-    }
+    // The mocked campaign has a due date, so its "Due" stat must render on the card (#57 fit-decision data)
+    await expect(campaignCard.getByText('Due', { exact: true })).toBeVisible();
   });
 
   // ============================================================================
