@@ -77,7 +77,8 @@ test.describe("Walker Field Scenarios - Automatable (No Real GPS Required)", () 
     await page.waitForLoadState("networkidle");
     await context.setOffline(true);
     await page.locator("body").click();
-    await page.waitForTimeout(500);
+    // The indicator appears once the app handles the offline event; wait for it if it shows
+    await page.locator("text=/[Oo]ffline|[Nn]o [Cc]onnection/i").first().waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
     const offlineIndicator = page.locator("text=/[Oo]ffline|[Nn]o [Cc]onnection/i");
     const hasOfflineIndicator = await offlineIndicator.isVisible().catch(() => false);
     const pageIsVisible = await page.locator("[class*='rounded']").count() > 0;
@@ -93,8 +94,8 @@ test.describe("Walker Field Scenarios - Automatable (No Real GPS Required)", () 
     await page.goto("/walker");
     await page.waitForLoadState("networkidle");
     await context.setOffline(true);
-    await page.waitForTimeout(300);
     const offlineText = page.locator("text=/[Oo]ffline/i");
+    await offlineText.first().waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
     const offlineVisible = await offlineText.isVisible().catch(() => false);
     expect(offlineVisible || page.url().includes("/walker")).toBeTruthy();
     await context.setOffline(false);
@@ -262,7 +263,6 @@ test.describe("Walker Field Scenarios - Automatable (No Real GPS Required)", () 
     await page.goto("/walker");
     await page.waitForLoadState("networkidle");
     await context.setOffline(true);
-    await page.waitForTimeout(500);
     await context.setOffline(false);
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/walker/, { timeout: 5000 });

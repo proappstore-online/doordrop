@@ -160,7 +160,7 @@ test.describe('Walker Core Journeys', () => {
     await page.goto('/walker/campaign/test-campaign-1');
 
     // Wait for campaign to load
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Should have campaign info visible
     const heading = page.locator('h1').first();
@@ -241,7 +241,7 @@ test.describe('Walker Core Journeys', () => {
     await page.goto('/walker/history');
 
     // Wait for page to load
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Look for completion-related UI
     const completionText = page.locator('text=/History|Completed|Earnings|Delivered|Paid/i');
@@ -254,7 +254,7 @@ test.describe('Walker Core Journeys', () => {
     page,
   }) => {
     await page.goto('/walker/history');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Look for status group headers (from #61: history redesign)
     const statusGroups = ['Completed', 'Pending Review', 'Paid', 'Disputed'];
@@ -268,7 +268,7 @@ test.describe('Walker Core Journeys', () => {
 
   test('walker sees earnings summary (total earnings, doors delivered, campaigns)', async ({ page }) => {
     await page.goto('/walker/history');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Look for earnings summary elements (from #61)
     const earningsLabel = page.locator('text=/Earnings|Income|Pay/i');
@@ -288,15 +288,15 @@ test.describe('Walker Core Journeys', () => {
   }) => {
     // Test mobile navigation flow
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
 
     // Navigate to campaign
     await page.goto('/walker/campaign/test-campaign-1');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
 
     // Navigate to history
     await page.goto('/walker/history');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
 
     // All navigations should complete without error
     expect(page.url()).toContain('/walker/history');
@@ -307,7 +307,7 @@ test.describe('Walker Core Journeys', () => {
 
     for (const url of pages) {
       await page.goto(url);
-      await page.waitForTimeout(500);
+      await page.waitForLoadState("networkidle");
 
       // Check for horizontal overflow
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);

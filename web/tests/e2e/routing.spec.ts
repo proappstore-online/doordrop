@@ -1909,9 +1909,6 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     // Submit
     await page.getByRole('button', { name: /Save Flyer/i }).click();
 
-    // Wait for the update calls to complete and verify active flyer is set
-    await page.waitForTimeout(500);
-
     // Verify the flyer list shows the new flyer
     await expect(page.locator('span', { hasText: /^First Flyer$/ })).toBeVisible();
 
@@ -2088,8 +2085,6 @@ test.describe('Campaign flyer automatic activation on creation', () => {
     // Submit
     await page.getByRole('button', { name: /Save Flyer/i }).click();
 
-    await page.waitForTimeout(500);
-
     // Verify the second flyer was added
     await expect(page.locator('span', { hasText: /^Second Flyer$/ })).toBeVisible();
 
@@ -2178,9 +2173,6 @@ test.describe('Campaign flyer automatic activation on creation', () => {
 
     // Submit
     await page.getByRole('button', { name: /Save Flyer/i }).click();
-
-    // Wait for submission
-    await page.waitForTimeout(500);
 
     // Flyer should still be created despite activation error
     await expect(page.locator('span', { hasText: /^Recovery Test Flyer$/ })).toBeVisible();

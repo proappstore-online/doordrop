@@ -99,7 +99,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
     for (const url of pages) {
       await page.goto(url);
-      await page.waitForTimeout(500);
+      await page.waitForLoadState("networkidle");
 
       // Check that content doesn't exceed viewport width
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
@@ -117,7 +117,7 @@ test.describe('Walker Mobile Accessibility', () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
 
     // Content should be accessible without overflow
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
@@ -132,7 +132,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker can tab through interactive elements', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Count interactive elements (buttons, links, inputs)
     const interactiveCount = await page.evaluate(() => {
@@ -146,7 +146,6 @@ test.describe('Walker Mobile Accessibility', () => {
     // Try tabbing through first few elements
     for (let i = 0; i < Math.min(3, interactiveCount); i++) {
       await page.keyboard.press('Tab');
-      await page.waitForTimeout(100);
     }
 
     // Focus should be on some element
@@ -160,7 +159,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker can activate buttons with Enter/Space keys', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Find first visible button
     const button = page.locator('button').first();
@@ -168,7 +167,6 @@ test.describe('Walker Mobile Accessibility', () => {
     if (await button.isVisible()) {
       // Focus the button
       await button.focus();
-      await page.waitForTimeout(100);
 
       // Verify it has focus
       const isFocused = await page.evaluate(() => document.activeElement?.tagName === 'BUTTON');
@@ -195,7 +193,7 @@ test.describe('Walker Mobile Accessibility', () => {
     page,
   }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check buttons for accessible names
     const buttons = page.locator('button');
@@ -219,7 +217,7 @@ test.describe('Walker Mobile Accessibility', () => {
   test('form inputs have associated labels', async ({ page }) => {
     // Navigate to pages that might have search/filter inputs
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check for inputs with labels or aria-label
     const inputs = page.locator('input[type="text"], input[type="search"]');
@@ -248,7 +246,7 @@ test.describe('Walker Mobile Accessibility', () => {
     page,
   }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check button sizes
     const buttons = page.locator('button');
@@ -280,7 +278,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker links have sufficient size or padding for touch', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     const links = page.locator('a[href]');
     const linkCount = await links.count();
@@ -306,7 +304,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker pages use sufficient color contrast (text readable)', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check that text is visible/readable (basic visual check)
     const paragraphs = page.locator('p, button, a, span[class*="text"]');
@@ -354,7 +352,7 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker interactive elements show visible focus indicators', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Find first button
     const button = page.locator('button').first();
@@ -383,14 +381,13 @@ test.describe('Walker Mobile Accessibility', () => {
 
   test('walker pages render correctly in dark mode (dark class)', async ({ page }) => {
     await page.goto('/walker/campaigns');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState("networkidle");
 
     // Simulate dark mode
     await page.evaluate(() => {
       document.documentElement.classList.add('dark');
     });
 
-    await page.waitForTimeout(500);
 
     // Page should still be readable
     const headings = page.locator('h1, h2, h3');

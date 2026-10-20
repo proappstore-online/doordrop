@@ -149,8 +149,7 @@ test.describe('Flyer pre-selection in campaign setup (Issue #63)', () => {
     // Wait for page to load
     await page.waitForSelector('text="Create a Campaign"');
 
-    // Should restore to step 3 (flyer step) from draft
-    await page.waitForTimeout(500);
+    // Should restore to step 3 (flyer step) from draft (the assertions below wait for it)
 
     // The selected flyer should be from the draft, not from the query param
     await expect(page.getByText('✓ Flyer selected (flyer-from-draft)')).toBeVisible();

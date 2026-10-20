@@ -113,10 +113,7 @@ test.describe("Walker Campaigns Page - Mobile UX", () => {
       // Click it
       await interestBtn.click();
 
-      // Wait for update and check for pending badge or button state change
-      await page.waitForTimeout(500);
-
-      // Button should now show "Withdraw" or be in different state
+      // Button should now show "Withdraw" or be in different state (the assertion below waits for it)
       const pendingBadge = page.locator("text=Pending");
       await expect(pendingBadge.or(interestBtn.filter({ hasText: /Withdraw/ }))).toBeVisible();
     }

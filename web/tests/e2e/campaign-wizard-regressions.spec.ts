@@ -350,8 +350,8 @@ test.describe('Campaign wizard regressions (#20 postcode, #21 printout)', () => 
     // Click Publish Campaign
     await publishButton.click();
 
-    // Wait for PATCH to be captured (the fake handles it synchronously in the route handler)
-    await page.waitForTimeout(500);
+    // Wait for the PATCH to be captured, then check there was exactly one
+    await expect.poll(() => capturedPatches.length).toBeGreaterThan(0);
 
     // Assert exactly one PATCH was made
     expect(capturedPatches.length).toBe(1);

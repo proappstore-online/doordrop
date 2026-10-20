@@ -92,7 +92,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("displays key stats grid on mobile", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // Check for stats labels (stats grid uses gap-3, not gap-4)
     const statsGrid = page.locator('[class*="grid"][class*="gap-3"]').first();
@@ -113,7 +113,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("shows flyer section with image", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     const flyerSection = page.locator("text=Flyer");
     if (await flyerSection.count() > 0) {
@@ -128,7 +128,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("displays doors list with delivery status", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // Check for doors section
     const doorsHeading = page.locator("text=Delivery Locations");
@@ -148,7 +148,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("express interest button visible for non-assigned walkers", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     const interestBtn = page.locator("button").filter({ hasText: /Express Interest|Withdraw/ });
 
@@ -160,7 +160,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("shows interest status badges", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // Look for interest status indicators
     const pendingBadge = page.locator("text=Pending");
@@ -174,7 +174,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
   test("start delivery button visible for assigned walkers", async ({ page }) => {
     // This test would need a campaign where the logged-in user is assigned
     await page.goto("/walker/campaign/test-assigned-campaign-id");
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     const startBtn = page.locator("button, a").filter({ hasText: /Start Delivery/ });
 
@@ -190,7 +190,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("shows notes section for assigned walkers", async ({ page }) => {
     await page.goto("/walker/campaign/test-assigned-campaign-id");
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Notes section should be visible for assigned walkers
     const notesSection = page.locator("text=Notes").first();
@@ -205,7 +205,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("displays policies section if present", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     const policiesHeading = page.locator("text=Delivery Policies");
 
@@ -244,7 +244,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
     await page.route("**/v1/campaigns/**", (route) => route.abort());
 
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check for error message
     const errorMsg = page.locator("text=Failed");
@@ -261,7 +261,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("campaign not found state", async ({ page }) => {
     await page.goto("/walker/campaign/nonexistent-id");
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle");
 
     // Check for not found message
     const notFoundMsg = page.locator("text=Campaign not found");
@@ -278,7 +278,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("door list shows first 20 items with more indicator", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     const doorItems = page.locator('[class*="border-gray"][class*="border-t"]');
 
@@ -292,7 +292,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("error banner dismissible", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // Navigate to cause potential error
     await page.route("**/v1/**", (route) => {
@@ -314,7 +314,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("interest button disabled while submitting", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     const interestBtn = page.locator("button").filter({ hasText: /Express Interest/ });
 
@@ -340,7 +340,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("mobile layout hides detailed campaign view", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // The CampaignSharedView should be hidden on mobile (hidden sm:block)
     const detailedView = page.locator('div.hidden.sm\\:block');
@@ -355,7 +355,7 @@ test.describe("Walker Campaign Detail Page - Mobile UX", () => {
 
   test("sticky CTA buttons stay visible on scroll", async ({ page }) => {
     await page.goto("/walker/campaign/test-campaign-id");
-    await page.waitForTimeout(1000);
+    await expect(page.locator("h1").first()).toBeVisible();
 
     // Find sticky button section
     const stickySection = page.locator('[class*="sticky"][class*="bottom"]').first();

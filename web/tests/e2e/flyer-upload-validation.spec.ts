@@ -103,10 +103,7 @@ test.describe('Flyer upload validation (Epic #32)', () => {
       buffer: largeBuffer,
     });
 
-    // Wait for preview or file to be processed
-    await page.waitForTimeout(500);
-
-    // Click submit button
+    // Click submit button (Playwright waits for the button to be ready)
     const submitButton = page.getByRole('button', { name: /Save Flyer/ });
     await submitButton.click();
 
@@ -136,10 +133,7 @@ test.describe('Flyer upload validation (Epic #32)', () => {
       buffer: invalidBuffer,
     });
 
-    // Wait for file processing
-    await page.waitForTimeout(500);
-
-    // Click submit button
+    // Click submit button (Playwright waits for the button to be ready)
     const submitButton = page.getByRole('button', { name: /Save Flyer/ });
     await submitButton.click();
 
@@ -182,7 +176,8 @@ test.describe('Flyer upload validation (Epic #32)', () => {
       buffer: pngBuffer,
     });
 
-    // Wait for preview
+    // Settle: this is a negative check. A validation error would appear right after the file change,
+    // and there is no element to wait for when the file is valid.
     await page.waitForTimeout(500);
 
     // Verify no error message
