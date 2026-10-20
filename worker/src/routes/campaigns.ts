@@ -138,9 +138,13 @@ router.post('/campaigns', async (c) => {
 
 router.get('/campaigns/:id', async (c) => {
   const campaignId = c.req.param('id');
-  await requireCampaignParticipant(c, campaignId);
+  // get_campaign decides: participants, and any walker for an open campaign. Anyone else gets the
+  // participant answer (403 if the campaign exists, 404 if not), as before.
   const row = await first(c, 'get_campaign', { id: campaignId });
-  if (!row) throw new HTTPException(404, { message: 'campaign not found' });
+  if (!row) {
+    await requireCampaignParticipant(c, campaignId);
+    throw new HTTPException(404, { message: 'campaign not found' });
+  }
   return c.json(hydrate(row));
 });
 

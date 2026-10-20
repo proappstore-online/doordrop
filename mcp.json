@@ -66,20 +66,15 @@
     },
     {
       "name": "get_user",
-      "description": "A user by id",
+      "description": "A user by id: the caller themself, an app admin, or a counterpart on a shared campaign",
       "operation": "query",
-      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users WHERE id = :id",
+      "sql": "SELECT id, email, name, photo_url, role, payment_mode, client_profile, walker_profile, campaign_id, street, suburb, postcode, state, country, location, phone_number, bio, website, linkedin, door_count, delivery_photos, profile_completed, created_at, updated_at, last_logged_in_at FROM users target WHERE target.id = :id AND (target.id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') OR EXISTS (SELECT 1 FROM campaigns c WHERE (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) AND (c.assigned_walker_id = target.id OR EXISTS (SELECT 1 FROM walker_interests wi WHERE wi.campaign_id = c.id AND wi.walker_id = target.id))) OR ((c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM walker_interests wi2 WHERE wi2.campaign_id = c.id AND wi2.walker_id = :__user_id)) AND EXISTS (SELECT 1 FROM json_each(c.admin_ids) j2 WHERE j2.value = target.id))))",
       "params": {
         "id": {
           "type": "string"
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "list_users",
@@ -172,9 +167,9 @@
     },
     {
       "name": "list_campaigns",
-      "description": "Campaigns the caller participates in or admin campaigns, filtered by status / suburb / postcode, newest first",
+      "description": "Campaigns the caller administers or is assigned to, plus open campaigns for walkers; filtered by status, admin, walker, suburb and postcode; newest first",
       "operation": "query",
-      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE (:statuses IS NULL OR c.status IN (SELECT value FROM json_each(:statuses))) AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) AND (:suburb IS NULL OR c.suburb = :suburb) AND (:postcode IS NULL OR c.postcode = :postcode) ORDER BY c.created_at DESC LIMIT 500",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE (:statuses IS NULL OR c.status IN (SELECT value FROM json_each(:statuses))) AND ((EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) OR (c.status = 'ready' AND c.assigned_walker_id IS NULL AND EXISTS (SELECT 1 FROM users me WHERE me.id = :__user_id AND me.role = 'walker'))) AND (:admin_id IS NULL OR EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :admin_id)) AND (:walker_id IS NULL OR c.assigned_walker_id = :walker_id) AND (:suburb IS NULL OR c.suburb = :suburb) AND (:postcode IS NULL OR c.postcode = :postcode) ORDER BY c.created_at DESC LIMIT 500",
       "params": {
         "statuses": {
           "type": "string",
@@ -188,15 +183,23 @@
         "postcode": {
           "type": "string",
           "optional": true
+        },
+        "admin_id": {
+          "type": "string",
+          "optional": true
+        },
+        "walker_id": {
+          "type": "string",
+          "optional": true
         }
       },
       "requires_auth": true
     },
     {
       "name": "get_campaign",
-      "description": "A campaign by id (caller must be admin, assigned walker, or app admin)",
+      "description": "A campaign by id (caller must be admin, assigned walker, or app admin; any walker may read an open campaign)",
       "operation": "query",
-      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns WHERE id = :id AND (EXISTS (SELECT 1 FROM json_each(admin_ids) j WHERE j.value = :__user_id) OR assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin'))",
+      "sql": "SELECT id, name, name_key, street_name, suburb, postcode, state, country, plan_type, status, admin_ids, member_ids, assigned_walker_id, schedule_rule, user_payment, total_doors, budget, due_date, completed_at, archived_at, lat, lng, door_radius_m, junk_mail_policy, property_filter, business_categories, active_printout_id, job_status, created_at, updated_at FROM campaigns c WHERE c.id = :id AND ((EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) OR (c.status = 'ready' AND c.assigned_walker_id IS NULL AND EXISTS (SELECT 1 FROM users me WHERE me.id = :__user_id AND me.role = 'walker')))",
       "params": {
         "id": {
           "type": "string"
@@ -208,7 +211,7 @@
       "name": "campaign_access",
       "description": "The caller's standing on a campaign: campaign admin, assigned walker, app admin",
       "operation": "query",
-      "sql": "SELECT :__user_id AS user_id, c.id, c.name, c.assigned_walker_id, EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = c.id AND aj.value = :__user_id) AS is_admin, COALESCE(c.assigned_walker_id = :__user_id, 0) AS is_walker, EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') AS is_platform_admin FROM campaigns c WHERE c.id = :id",
+      "sql": "SELECT :__user_id AS user_id, c.id, CASE WHEN (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) THEN c.name END AS name, CASE WHEN (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin')) THEN c.assigned_walker_id END AS assigned_walker_id, EXISTS (SELECT 1 FROM campaigns ca, json_each(ca.admin_ids) aj WHERE ca.id = c.id AND aj.value = :__user_id) AS is_admin, COALESCE(c.assigned_walker_id = :__user_id, 0) AS is_walker, EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin') AS is_platform_admin FROM campaigns c WHERE c.id = :id",
       "params": {
         "id": {
           "type": "string"
@@ -218,20 +221,15 @@
     },
     {
       "name": "get_campaign_status",
-      "description": "Get campaign status only (for delivery lifecycle checks)",
+      "description": "Campaign status for the caller, if they administer or are assigned to it (for delivery lifecycle checks)",
       "operation": "query",
-      "sql": "SELECT status FROM campaigns WHERE id = :id",
+      "sql": "SELECT c.status FROM campaigns c WHERE c.id = :id AND (EXISTS (SELECT 1 FROM json_each(c.admin_ids) j WHERE j.value = :__user_id) OR c.assigned_walker_id = :__user_id OR EXISTS (SELECT 1 FROM users au WHERE au.id = :__user_id AND au.role = 'admin'))",
       "params": {
         "id": {
           "type": "string"
         }
       },
-      "requires_auth": true,
-      "auth": {
-        "caller_unscoped": {
-          "reason": "Used internally by worker routes for lifecycle checks; authorization enforced at the route layer"
-        }
-      }
+      "requires_auth": true
     },
     {
       "name": "create_campaign",
@@ -878,7 +876,7 @@
       "name": "list_walker_reviews",
       "description": "A walker's reviews, newest first",
       "operation": "query",
-      "sql": "SELECT * FROM walker_reviews WHERE walker_id = :walker_id ORDER BY created_at DESC LIMIT 500",
+      "sql": "SELECT id, walker_id, reviewer_id, reviewer_name, schedule_id, rating, comment, created_at, updated_at FROM walker_reviews WHERE walker_id = :walker_id ORDER BY created_at DESC LIMIT 500",
       "params": {
         "walker_id": {
           "type": "string"
@@ -887,7 +885,7 @@
       "requires_auth": true,
       "auth": {
         "caller_unscoped": {
-          "reason": "Faithful port of the pre-port worker, where any signed-in user could read these rows (platform#264); tightening is tracked separately."
+          "reason": "Walker reviews are public: they are shown on walker profiles. campaign_id is withheld so a walker's assignments stay private; schedule_id stays because the review form uses it to detect an existing review (platform#264)."
         }
       }
     },

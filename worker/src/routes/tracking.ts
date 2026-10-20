@@ -22,8 +22,9 @@ async function requireSessionOwner(c: Ctx, sessionId: string): Promise<void> {
 // POST /campaigns/:campaignId/track-sessions — start a new tracking session (assigned-walker)
 router.post('/campaigns/:campaignId/track-sessions', async (c) => {
   const campaignId = c.req.param('campaignId');
-  await requireActiveCampaign(c, campaignId);
+  // Access first: a walker who isn't assigned gets 403, not the campaign-status answer.
   await requireAssignedWalker(c, campaignId);
+  await requireActiveCampaign(c, campaignId);
   const id = newId();
   await run(c, 'start_track_session', { id, campaign_id: campaignId });
   await publishCampaignEvent(c, { type: 'tracking.changed', campaignId, sessionId: id });

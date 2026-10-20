@@ -67,9 +67,6 @@ router.patch('/campaigns/:campaignId/doors/:doorId', async (c) => {
   const campaignId = c.req.param('campaignId');
   const doorId = c.req.param('doorId');
 
-  // Delivery writes only allowed in active campaigns (ready or assigned)
-  await requireActiveCampaign(c, campaignId);
-
   // Authz: campaign-admin can update any field; assigned-walker only the delivery allow-list.
   const access = await campaignAccess(c, campaignId);
   if (!access) throw new HTTPException(404, { message: 'campaign not found' });
@@ -77,6 +74,9 @@ router.patch('/campaigns/:campaignId/doors/:doorId', async (c) => {
   if (!isCampaignAdmin && !access.is_walker) {
     throw new HTTPException(403, { message: 'campaign-admin or assigned-walker required' });
   }
+
+  // Delivery writes only allowed in active campaigns (ready or assigned), checked after access
+  await requireActiveCampaign(c, campaignId);
 
   const body = await c.req.json<Record<string, unknown>>();
   const updates = pickDefined(body, isCampaignAdmin ? ADMIN_ALLOWED : WALKER_ALLOWED);

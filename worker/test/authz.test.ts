@@ -45,6 +45,9 @@ beforeEach(async () => {
   const created = await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Elm St drop' });
   expect(created.status).toBe(201);
   campaignId = created.body.id;
+  // Assignment comes from a walker's interest, and the client can only read walkers it shares a campaign with.
+  // Record the interest directly (not via the route) so no notification is created for these tests.
+  db.prepare("INSERT INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) VALUES ('interest-setup', ?, ?, 0, 0)").run(WALKER_1, campaignId);
   expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_1, status: 'assigned' })).status).toBe(200);
   const door = await req(CLIENT_1, 'POST', `/v1/campaigns/${campaignId}/doors`, { address: '1 Elm St' });
   expect(door.status).toBe(201);
@@ -215,6 +218,7 @@ describe('a client cannot edit another client\'s campaign', () => {
   it('lets the campaign admin edit it, and notifies a newly assigned walker in the same transaction', async () => {
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { admin_ids: 'x' })).status).toBe(400);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { status: 'bogus' })).status).toBe(400);
+    db.prepare("INSERT INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) VALUES ('interest-setup-2', ?, ?, 0, 0)").run(WALKER_2, campaignId);
     expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${campaignId}`, { assigned_walker_id: WALKER_2, budget: 50 })).status).toBe(200);
     const campaign = (await req(WALKER_2, 'GET', `/v1/campaigns/${campaignId}`)).body;
     expect(campaign).toMatchObject({ assigned_walker_id: WALKER_2, budget: 50, admin_ids: [CLIENT_1], member_ids: [] });
@@ -435,18 +439,26 @@ describe('app admin, self-only and owner-only rules', () => {
     expect(row('SELECT payment_mode FROM users WHERE id = ?', CLIENT_1).payment_mode).toBe('platform');
   });
 
-  it('any user can fetch any user profile', async () => {
-    const res = await req(CLIENT_2, 'GET', `/v1/users/${CLIENT_1}`);
-    expect(res.status).toBe(200);
+  it('a user profile is readable by its owner, app admins and campaign counterparts only (#85)', async () => {
+    // An unrelated client gets nothing, through the worker or straight at the action (no existence leak either)
+    expect((await req(CLIENT_2, 'GET', `/v1/users/${CLIENT_1}`)).status).toBe(404);
+    expect((await direct(CLIENT_2, 'get_user', { id: CLIENT_1 })).rows).toEqual([]);
+
+    // The owner reads their own full record
+    const own = await req(CLIENT_1, 'GET', `/v1/users/${CLIENT_1}`);
+    expect(own.status).toBe(200);
     // API returns snake_case keys (created_at, photo_url, etc), which frontend converts via fromWire()
-    expect(res.body).toMatchObject({ id: CLIENT_1, name: CLIENT_1, role: 'client' });
-    expect(res.body).toHaveProperty('created_at');
+    expect(own.body).toMatchObject({ id: CLIENT_1, name: CLIENT_1, role: 'client' });
+    expect(own.body).toHaveProperty('created_at');
+
+    // App admins read anyone
+    expect((await req(ADMIN, 'GET', `/v1/users/${CLIENT_2}`)).status).toBe(200);
 
     // Non-existent user returns 404
     expect((await req(CLIENT_1, 'GET', '/v1/users/nope')).status).toBe(404);
 
-    // Action directly returns the raw row with all columns
-    const directResult = await direct(WALKER_1, 'get_user', { id: CLIENT_1 });
+    // The action returns the raw row to the owner
+    const directResult = await direct(CLIENT_1, 'get_user', { id: CLIENT_1 });
     expect(directResult).toHaveProperty('rows');
     expect(directResult.rows?.[0]).toMatchObject({ id: CLIENT_1, name: CLIENT_1 });
   });
