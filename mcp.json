@@ -844,10 +844,10 @@
     },
     {
       "name": "create_interest",
-      "description": "Register the caller's (walker-only) interest in a campaign and notify its admins",
+      "description": "Register the caller's (walker-only) interest in an open campaign (ready, no walker assigned) and notify its admins",
       "operation": "batch",
       "statements": [
-        "INSERT OR IGNORE INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) SELECT :id, :__user_id, c.id, :__now, :__now FROM campaigns c, users u WHERE c.id = :campaign_id AND u.id = :__user_id AND u.role = 'walker'",
+        "INSERT OR IGNORE INTO walker_interests (id, walker_id, campaign_id, created_at, updated_at) SELECT :id, :__user_id, c.id, :__now, :__now FROM campaigns c, users u WHERE c.id = :campaign_id AND u.id = :__user_id AND u.role = 'walker' AND c.status = 'ready' AND c.assigned_walker_id IS NULL",
         "INSERT INTO notifications (id, user_id, type, title, body, campaign_id, read, created_at) SELECT lower(hex(randomblob(16))), j.value, 'walker_interested', 'New walker interested', COALESCE((SELECT u.name FROM users u WHERE u.id = :__user_id), :__user_id) || ' wants to deliver for ' || c.name, c.id, 0, :__now FROM campaigns c, json_each(c.admin_ids) j WHERE c.id = :campaign_id AND EXISTS (SELECT 1 FROM walker_interests i WHERE i.id = :id AND i.walker_id = :__user_id AND i.created_at = :__now)"
       ],
       "params": {

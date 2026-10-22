@@ -46,6 +46,14 @@ router.post('/interests', async (c) => {
     throw new HTTPException(404, { message: 'campaign not found' });
   }
 
+  // Interest is only for open campaigns (ready, no walker assigned). create_interest enforces this too; checking
+  // here gives the caller a clear answer instead of the 'already interested' a blocked insert would look like.
+  // A walker can only read a campaign through get_campaign if it is open or theirs, so no row means not open.
+  const open = await first<{ status: string; assigned_walker_id: string | null }>(c, 'get_campaign', { id: body.campaignId });
+  if (!open || open.status !== 'ready' || open.assigned_walker_id) {
+    throw new HTTPException(409, { message: 'campaign is not open for interest' });
+  }
+
   // One transaction: the interest, then a walker_interested notification to every campaign admin.
   const id = newId();
   const res = (await call(c, 'create_interest', { id, campaign_id: body.campaignId })) as {

@@ -32,6 +32,13 @@ function direct(user: string, name: string, params: Record<string, unknown> = {}
 
 const row = (sql: string, ...params: (string | number)[]) => db.prepare(sql).get(...params) as any;
 
+/** A ready, unassigned campaign: the only kind a walker can express interest in. */
+async function createOpenCampaign(name = 'Open St drop') {
+  const id = (await req(CLIENT_1, 'POST', '/v1/campaigns', { name })).body.id as string;
+  expect((await req(CLIENT_1, 'PATCH', `/v1/campaigns/${id}`, { status: 'ready' })).status).toBe(200);
+  return id;
+}
+
 let campaignId: string;
 let doorId: string;
 
@@ -326,6 +333,7 @@ describe('a walker cannot see or act on another walker\'s assignment', () => {
 // #86: a walker's interest notifies the campaign admin in real time, not only in the notifications table.
 describe('interest notifications (#86)', () => {
   it('publishes notification.created to each campaign admin room when a walker expresses interest', async () => {
+    const openId = await createOpenCampaign();
     const pas = fakePas(db, WALKER_2);
     const publish = vi.fn(async () => ({ delivered: 1 }));
     pas.rooms.publish = publish;
@@ -333,12 +341,51 @@ describe('interest notifications (#86)', () => {
       new Request('https://doordrop.proappstore.online/v1/interests', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify({ campaignId: openId }),
       }),
       { pas },
     );
     expect(res.status).toBe(201);
     expect(publish).toHaveBeenCalledWith(`user:${CLIENT_1}`, { type: 'notification.created', userId: CLIENT_1 });
+  });
+});
+
+// #87: interest is only for open campaigns (status ready, no walker assigned). The action enforces it, because a
+// signed-in user can call create_interest without the worker.
+describe('interest only for open campaigns (#87)', () => {
+  it('refuses interest in a campaign that is not open, through the worker and straight at the action', async () => {
+    const draft = (await req(CLIENT_1, 'POST', '/v1/campaigns', { name: 'Draft drop' })).body.id as string;
+    const complete = await createOpenCampaign('Done drop');
+    db.prepare("UPDATE campaigns SET status = 'complete' WHERE id = ?").run(complete);
+    const taken = await createOpenCampaign('Taken drop');
+    db.prepare('UPDATE campaigns SET assigned_walker_id = ? WHERE id = ?').run(WALKER_1, taken);
+
+    const notOpen: [string, string][] = [
+      ['draft', draft],
+      ['assigned', campaignId],
+      ['complete', complete],
+      ['ready but already has a walker', taken],
+    ];
+    for (const [label, id] of notOpen) {
+      const res = await req(WALKER_2, 'POST', '/v1/interests', { campaignId: id });
+      expect(res.status, label).toBe(409);
+      expect(JSON.stringify(res.body), label).toMatch(/not open/);
+      const direct1 = await direct(WALKER_2, 'create_interest', { id: `direct-${label}`, campaign_id: id });
+      expect(direct1.results?.[0]?.meta?.changes, label).toBe(0);
+    }
+
+    // Nothing was recorded, and no admin was notified
+    expect(row('SELECT count(*) AS n FROM walker_interests WHERE walker_id = ?', WALKER_2).n).toBe(0);
+    expect(row('SELECT count(*) AS n FROM notifications WHERE type = ?', 'walker_interested').n).toBe(0);
+  });
+
+  it('still accepts interest in an open campaign, through the worker and straight at the action', async () => {
+    const open1 = await createOpenCampaign('Open one');
+    const open2 = await createOpenCampaign('Open two');
+    expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId: open1 })).status).toBe(201);
+    const direct2 = await direct(WALKER_2, 'create_interest', { id: 'direct-open', campaign_id: open2 });
+    expect(direct2.results?.[0]?.meta?.changes).toBe(1);
+    expect(row('SELECT count(*) AS n FROM walker_interests WHERE walker_id = ?', WALKER_2).n).toBe(2);
   });
 });
 
@@ -575,13 +622,14 @@ describe('app admin, self-only and owner-only rules', () => {
   });
 
   it('interests, reviews and notifications belong to their author', async () => {
-    const interest = await req(WALKER_2, 'POST', '/v1/interests', { campaignId });
+    const openId = await createOpenCampaign();
+    const interest = await req(WALKER_2, 'POST', '/v1/interests', { campaignId: openId });
     expect(interest.status).toBe(201);
-    expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId })).status).toBe(409);
+    expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId: openId })).status).toBe(409);
     expect((await req(WALKER_2, 'POST', '/v1/interests', { campaignId: 'nope' })).status).toBe(404);
     const adminNotes = (await req(CLIENT_1, 'GET', '/v1/notifications?unread=true')).body;
     expect(adminNotes).toHaveLength(1);
-    expect(adminNotes[0]).toMatchObject({ type: 'walker_interested', body: `${WALKER_2} wants to deliver for Elm St drop` });
+    expect(adminNotes[0]).toMatchObject({ type: 'walker_interested', body: `${WALKER_2} wants to deliver for Open St drop` });
     // A duplicate interest does not notify again.
     expect(row('SELECT count(*) AS n FROM notifications WHERE type = ?', 'walker_interested').n).toBe(1);
 
