@@ -67,27 +67,3 @@ export const DraftFlyerNotices: React.FC<ActiveFlyerProps> = ({ printouts, activ
     )}
   </>
 );
-
-/** The flyer walkers deliver, shown to everyone once the campaign has left draft. */
-export const ActiveFlyerCard: React.FC<ActiveFlyerProps> = ({ printouts, activePrintoutId }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Flyer for This Campaign</h3>
-    {(() => {
-      const activePrintout = printouts.find((p) => p.id === activePrintoutId);
-      if (!activePrintout) return null;
-      return (
-        <div className="flex items-center gap-3">
-          {activePrintout.fileUrl && (
-            <img src={activePrintout.fileUrl} alt={activePrintout.name} className="h-16 w-16 rounded object-cover flex-shrink-0" />
-          )}
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-gray-100">{activePrintout.name}</p>
-            {activePrintout.description && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">{activePrintout.description}</p>
-            )}
-          </div>
-        </div>
-      );
-    })()}
-  </div>
-);

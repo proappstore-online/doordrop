@@ -23,7 +23,7 @@ import MutationErrorBanner from "../../components/campaign/clientDetail/Mutation
 import CampaignDetailsSection from "../../components/campaign/clientDetail/CampaignDetailsSection";
 import WalkerTrackingSection from "../../components/campaign/clientDetail/WalkerTrackingSection";
 import DoorManagementPanels from "../../components/campaign/clientDetail/DoorManagementPanels";
-import { DraftFlyerNotices, ActiveFlyerCard } from "../../components/campaign/clientDetail/ActiveFlyerCards";
+import { DraftFlyerNotices } from "../../components/campaign/clientDetail/ActiveFlyerCards";
 import ReviewSection from "../../components/campaign/clientDetail/ReviewSection";
 import { CampaignNoteRepository, type CampaignNote } from "../../repositories/campaignNoteRepository";
 import Notes from "../UserInfoPage/Dashboard/Notes";
@@ -490,7 +490,7 @@ const ClientCampaignDetailPage: React.FC = () => {
   const nextActorRole: ActorRole = isAdmin ? (userData?.role === "admin" ? "platform_admin" : "campaign_admin") : "assigned_walker";
   const availableActions = campaign?.status ? getNextActions(campaign.status, nextActorRole) : [];
 
-  // The editor's fields, shared by both places the details editor renders.
+  // The details editor's fields.
   const detailsEditorProps = {
     campaign,
     statusUpdating,
@@ -511,7 +511,7 @@ const ClientCampaignDetailPage: React.FC = () => {
     onPublish: handlePublish,
   };
 
-  // The walker tracking panel's props, shared by both places it renders.
+  // The walker tracking panel's props.
   const walkerTrackingProps = {
     campaign,
     trackingState,
@@ -572,33 +572,13 @@ const ClientCampaignDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Primary Content Area - Left/Center */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Active Campaign: Show Map */}
-            {campaign.status === "assigned" ? (
-              <CampaignMap
-                center={effectiveCenter}
-                doors={mapDoors}
-                doorRadiusM={activeDoorRadius}
-                trackPoints={displayTrackPoints}
-                trackStops={displayTrackStops}
-                walkerPosition={mapWalkerPosition}
-                isTracking={isTracking}
-                onDoorClick={handleDoorClick}
-              />
-            ) : campaign.status === "draft" || campaign.status === "ready" ? (
-              /* Draft/Ready: Show Details Editor */
-              isAdmin ? (
-                <CampaignDetailsSection {...detailsEditorProps} />
-              ) : null
-            ) : campaign.status === "complete" || campaign.status === "review" || campaign.status === "payment" ? (
-              /* Closed Campaigns: Show Stats */
-              <CampaignStats
-                campaign={campaign}
-                totalDoors={doors.length}
-                deliveredCount={deliveredCount}
-                reportedCount={reportedCount}
-              />
-            ) : campaign.status === "archive" ? (
-              /* Archived Campaign */
+            {/* Draft/Ready: the admin's settings and publish controls */}
+            {(campaign.status === "draft" || campaign.status === "ready") && isAdmin && (
+              <CampaignDetailsSection {...detailsEditorProps} />
+            )}
+
+            {/* Archived Campaign */}
+            {campaign.status === "archive" && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 dark:border-slate-800 dark:bg-slate-900/20">
                 <div className="flex gap-4">
                   <svg className="h-12 w-12 text-slate-400 dark:text-slate-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -610,7 +590,17 @@ const ClientCampaignDetailPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : null}
+            )}
+
+            {/* Delivery stats, once the campaign has left draft */}
+            {campaign.status !== "draft" && (
+              <CampaignStats
+                campaign={campaign}
+                totalDoors={doors.length}
+                deliveredCount={deliveredCount}
+                reportedCount={reportedCount}
+              />
+            )}
 
             {/* Delivery Tracking Panel for Assigned Walker */}
             {isAssignedWalker && !campaignClosed && <WalkerTrackingSection {...walkerTrackingProps} />}
@@ -662,41 +652,6 @@ const ClientCampaignDetailPage: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Address Selection & Door List (for draft/ready with admin) */}
-        {isAdmin && (campaign.status === "draft" || campaign.status === "ready") && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <CampaignMap
-                center={effectiveCenter}
-                doors={mapDoors}
-                doorRadiusM={activeDoorRadius}
-                trackPoints={displayTrackPoints}
-                trackStops={displayTrackStops}
-                walkerPosition={mapWalkerPosition}
-                isTracking={isTracking}
-                onDoorClick={handleDoorClick}
-              />
-            </div>
-            <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
-              <DoorManagementPanels
-                campaignId={campaignId!}
-                campaign={campaign}
-                doorManagement={doorManagement}
-                showAddressSelection
-                doorsByStreet={doorsByStreet}
-                expandedStreets={expandedStreets}
-                expandedDoorId={expandedDoorId}
-                printouts={printouts}
-                canEditDoors={canEditDoors}
-                onToggleStreet={toggleStreet}
-                onToggleDoor={setExpandedDoorId}
-                onDoorClick={handleDoorClick}
-                onDoorReport={handleDoorReport}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Printout Manager */}
         {isAdmin && (
@@ -762,65 +717,46 @@ const ClientCampaignDetailPage: React.FC = () => {
           />
         )}
 
-        {/* Publish Modal */}
+        {/* Notices while the campaign is a draft; once it moves on, the flyer panel in the sidebar shows the flyer */}
+        {isAdmin && campaign.status === "draft" && (
+          <DraftFlyerNotices printouts={printouts} activePrintoutId={activePrintoutId} />
+        )}
 
-      {isAssignedWalker && !campaignClosed && <WalkerTrackingSection {...walkerTrackingProps} />}
-
-      {isAdmin && campaign.status === "draft" && <CampaignDetailsSection {...detailsEditorProps} />}
-
-      {campaign.status !== "draft" && (
-        <CampaignStats
-          campaign={campaign}
-          totalDoors={doors.length}
-          deliveredCount={deliveredCount}
-          reportedCount={reportedCount}
-        />
-      )}
-
-      {/* Issue #21: Active flyer visibility and empty states */}
-      {isAdmin && campaign.status === "draft" && (
-        <DraftFlyerNotices printouts={printouts} activePrintoutId={activePrintoutId} />
-      )}
-
-      {/* Show active flyer display to all users (not just admin) in non-draft status */}
-      {activePrintoutId && printouts.length > 0 && campaign.status !== "draft" && (
-        <ActiveFlyerCard printouts={printouts} activePrintoutId={activePrintoutId} />
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-4">
-        <CampaignMap
-          center={effectiveCenter}
-          doors={mapDoors}
-          availableAddresses={doorManagement.availableAddresses}
-          selectedDoorKeys={doorManagement.selectedDoorKeys}
-          onMarkerClick={doorManagement.toggleAddress}
-          onDoorClick={canEditDoors ? handleDoorClick : undefined}
-          walkerPosition={mapWalkerPosition}
-          trackPoints={displayTrackPoints.length > 0 ? displayTrackPoints : undefined}
-          trackStops={displayTrackStops.length > 0 ? displayTrackStops : undefined}
-          doorRadiusM={activeDoorRadius}
-          isTracking={shouldFollowTracker}
-          className="flex-1 h-[350px] lg:h-[600px] rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600"
-        />
-
-        <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
-          <DoorManagementPanels
-            campaignId={campaignId!}
-            campaign={campaign}
-            doorManagement={doorManagement}
-            showAddressSelection={isAdmin && campaign.status === "draft"}
-            doorsByStreet={doorsByStreet}
-            expandedStreets={expandedStreets}
-            expandedDoorId={expandedDoorId}
-            printouts={printouts}
-            canEditDoors={canEditDoors}
-            onToggleStreet={toggleStreet}
-            onToggleDoor={setExpandedDoorId}
-            onDoorClick={handleDoorClick}
-            onDoorReport={handleDoorReport}
+        {/* Map and doors, for every status and role. Admins pick addresses here while the campaign is draft or ready. */}
+        <div className="flex flex-col lg:flex-row gap-4">
+          <CampaignMap
+            center={effectiveCenter}
+            doors={mapDoors}
+            availableAddresses={doorManagement.availableAddresses}
+            selectedDoorKeys={doorManagement.selectedDoorKeys}
+            onMarkerClick={doorManagement.toggleAddress}
+            onDoorClick={canEditDoors ? handleDoorClick : undefined}
+            walkerPosition={mapWalkerPosition}
+            trackPoints={displayTrackPoints.length > 0 ? displayTrackPoints : undefined}
+            trackStops={displayTrackStops.length > 0 ? displayTrackStops : undefined}
+            doorRadiusM={activeDoorRadius}
+            isTracking={shouldFollowTracker}
+            className="flex-1 h-[350px] lg:h-[600px] rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600"
           />
+
+          <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-[600px]">
+            <DoorManagementPanels
+              campaignId={campaignId!}
+              campaign={campaign}
+              doorManagement={doorManagement}
+              showAddressSelection={isAdmin && (campaign.status === "draft" || campaign.status === "ready")}
+              doorsByStreet={doorsByStreet}
+              expandedStreets={expandedStreets}
+              expandedDoorId={expandedDoorId}
+              printouts={printouts}
+              canEditDoors={canEditDoors}
+              onToggleStreet={toggleStreet}
+              onToggleDoor={setExpandedDoorId}
+              onDoorClick={handleDoorClick}
+              onDoorReport={handleDoorReport}
+            />
+          </div>
         </div>
-      </div>
 
         {/* Door Report Modal */}
         {reportingDoor && campaignId && currentUser && reportingDoor.propertyId && (
